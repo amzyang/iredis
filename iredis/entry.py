@@ -9,6 +9,7 @@ import click
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.enums import EditingMode
 from prompt_toolkit import print_formatted_text
 
 from .client import Client
@@ -222,6 +223,7 @@ def main():
         style=STYLE,
         auto_suggest=AutoSuggestFromHistory(),
         complete_while_typing=True,
+        editing_mode=EditingMode.VI,
     )
     compile_grammar_bg(session)
 
