@@ -131,7 +131,7 @@ version, but you can use this flag to disable it."""
 @click.option("--no-info", default=False, is_flag=True, help=NO_INFO)
 @click.option(
     "--newbie/--no-newbie",
-    default=False,
+    default=True,
     is_flag=True,
     help="Show command hints and useful helps.",
 )
