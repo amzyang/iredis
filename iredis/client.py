@@ -34,11 +34,12 @@ from .commands import (
     split_unknown_args,
 )
 from .completers import IRedisCompleter
-from .config import config
+from .config import config, save_patterns
 from .exceptions import NotRedisCommand, InvalidArguments, AmbiguousCommand, NotSupport
 from .renders import OutputRender
 from .utils import (
     compose_command_syntax,
+    ensure_str,
     nativestr,
     exit,
     convert_formatted_text_to_bytes,
@@ -88,6 +89,11 @@ class Client:
 
         self.client_id = None
         self.client_addr = None
+
+        # PATTERN command scan state, (db, group name) -> next cursor
+        self.pattern_cursors = {}
+        # completer of current REPL session, updated on every send_command
+        self._completer = None
 
         self.build_connection()
 
@@ -248,11 +254,17 @@ class Client:
         return f"{prompt}> "
 
     def client_execute_command(self, command_name, *args):
-        command = command_name.upper()
+        command = " ".join(command_name.split()).upper()
         if command == "HELP":
             yield self.do_help(*args)
         if command == "PEEK":
             yield from self.do_peek(*args)
+        if command == "PATTERN":
+            yield from self.do_pattern(*args)
+        if command == "PATTERN ADD":
+            yield from self.do_pattern_add(*args)
+        if command == "PATTERN RM":
+            yield from self.do_pattern_rm(*args)
         if command == "CLEAR":
             clear()
         if command == "EXIT":
@@ -455,6 +467,8 @@ class Client:
                 raw_command, completer
             )
         logger.info(f"[Prepare command] Redis: {redis_command}, Shell: {shell_command}")
+        # client-side commands (e.g. PATTERN) also want to update completers
+        self._completer = completer
         try:
             try:
                 command_name, args = split_command_args(redis_command)
@@ -779,3 +793,183 @@ class Client:
             yield convert_formatted_text_to_bytes(flat_formatted_text_pair)
             return
         yield FormattedText(flat_formatted_text_pair)
+
+    # PATTERN group names that collide with PATTERN's own subcommands
+    PATTERN_RESERVED_NAMES = ("ADD", "RM")
+    # stop scanning early once a batch collected this many keys
+    PATTERN_BATCH_SIZE = 100
+
+    def _yield_formatted(self, formatted_text_tuples):
+        if config.raw:
+            yield convert_formatted_text_to_bytes(formatted_text_tuples)
+            return
+        yield FormattedText(formatted_text_tuples)
+
+    def do_pattern(self, name=None, cursor=None):
+        """
+        PATTERN command implementation.
+
+        Without argument, list saved pattern groups. With a group name, scan
+        keys matching the group's pattern, one batch (~100 keys) at a time.
+        The scan cursor is remembered per (db, group): running the same
+        command again continues scanning; passing a cursor explicitly
+        (e.g. ``PATTERN group 0``) scans from there.
+        """
+        if name is None:
+            rendered = []
+            if not config.patterns:
+                yield (
+                    "No pattern group yet, use `PATTERN ADD <group> <pattern>`"
+                    " to create one. E.g.: PATTERN ADD users user:*"
+                )
+                return
+            for group, pattern in config.patterns.items():
+                rendered.extend(
+                    [
+                        ("class:group", group),
+                        ("", ": "),
+                        ("class:pattern", pattern),
+                        renders.NEWLINE_TUPLE,
+                    ]
+                )
+            yield from self._yield_formatted(rendered[:-1])
+            return
+
+        pattern = config.patterns.get(name)
+        if pattern is None:
+            groups_hint = ", ".join(config.patterns) or "<empty>"
+            yield (
+                f"Pattern group '{name}' doesn't exist. Saved groups:"
+                f" {groups_hint}. Use `PATTERN ADD {name} <pattern>` to"
+                " create it."
+            )
+            return
+
+        state_key = (self.db, name)
+        if cursor is None:
+            cursor = self.pattern_cursors.get(state_key, 0)
+            continued = cursor != 0
+        else:
+            cursor = int(cursor)
+            continued = False
+
+        keys = []
+        count_hint = 100
+        iterations = 0
+        while True:
+            resp = self.execute("SCAN", cursor, "MATCH", pattern, "COUNT", count_hint)
+            cursor = int(resp[0])
+            keys.extend(resp[1])
+            iterations += 1
+            if cursor == 0:
+                break
+            if len(keys) >= self.PATTERN_BATCH_SIZE:
+                break
+            # safety guard for pathological cases, keep the REPL responsive
+            if iterations >= 1000:
+                break
+            # like Medis: for sparse patterns, raise COUNT to reduce
+            # round-trips to the server
+            if len(keys) < 10:
+                count_hint = 5000
+            elif len(keys) < 50:
+                count_hint = 2000
+            else:
+                count_hint = 1000
+
+        if cursor:
+            self.pattern_cursors[state_key] = cursor
+        else:
+            self.pattern_cursors.pop(state_key, None)
+
+        types = self._fetch_types(keys)
+
+        # scanned keys are candidates of next commands' key argument
+        if self._completer:
+            self._completer.key_completer.touch_words(ensure_str(keys))
+
+        rendered = [
+            ("class:dockey", "pattern: "),
+            ("class:pattern", pattern),
+            ("", "  (group: "),
+            ("class:group", name),
+            ("", ")"),
+            renders.NEWLINE_TUPLE,
+        ]
+        for key, key_type in zip(keys, types):
+            rendered.extend(
+                [
+                    ("class:string", key_type.ljust(8)),
+                    ("class:key", ensure_str(key)),
+                    renders.NEWLINE_TUPLE,
+                ]
+            )
+        if not keys:
+            rendered.append(("class:type", "(no key matched in this batch)"))
+            rendered.append(renders.NEWLINE_TUPLE)
+        if cursor:
+            rendered.append(
+                (
+                    "class:dockey",
+                    f"({len(keys)} keys in this batch, cursor {cursor}. Run"
+                    f" `PATTERN {name}` again to continue scanning.)",
+                )
+            )
+        else:
+            done_hint = "scan finished" if continued else "full scan finished"
+            rendered.append(
+                ("class:dockey", f"({len(keys)} keys in this batch, {done_hint}.)")
+            )
+        yield from self._yield_formatted(rendered)
+
+    def _fetch_types(self, keys):
+        """Fetch key types with one pipelined round-trip."""
+        if not keys:
+            return []
+        for key in keys:
+            self.connection.send_command("TYPE", key)
+        return [nativestr(self.connection.read_response()) for _ in keys]
+
+    def do_pattern_add(self, name=None, pattern=None):
+        if not name or not pattern:
+            yield (
+                "Usage: PATTERN ADD <group> <pattern>. E.g.:"
+                " PATTERN ADD users user:*"
+            )
+            return
+        if name.upper() in self.PATTERN_RESERVED_NAMES:
+            yield (
+                f"'{name}' is a subcommand of PATTERN, can't be used as a"
+                " group name."
+            )
+            return
+        config.patterns[name] = pattern
+        iredisrc = save_patterns(config.patterns)
+        yield from self._yield_formatted(
+            [
+                ("class:group", name),
+                ("", ": "),
+                ("class:pattern", pattern),
+                ("", f" saved to {iredisrc}"),
+            ]
+        )
+
+    def do_pattern_rm(self, name=None):
+        if not name:
+            yield "Usage: PATTERN RM <group>"
+            return
+        if name not in config.patterns:
+            yield f"Pattern group '{name}' doesn't exist."
+            return
+        del config.patterns[name]
+        iredisrc = save_patterns(config.patterns)
+        # drop remembered scan cursors of this group, for all dbs
+        for state_key in list(self.pattern_cursors):
+            if state_key[1] == name:
+                del self.pattern_cursors[state_key]
+        yield from self._yield_formatted(
+            [
+                ("class:group", name),
+                ("", f" removed from {iredisrc}"),
+            ]
+        )

@@ -649,3 +649,127 @@ def test_prompt():
     assert re.match(r"^\d+ aabc$", str(c))
     c = Client(prompt="{client_addr} >")
     assert re.match(r"^127.0.0.1:\d+ >$", str(c))
+
+
+KEY_LINE_RE = re.compile(r"^(string|list|set|zset|hash|stream)\s+(.+)$")
+
+
+def _run_client_command(client, command, completer=None):
+    outputs = []
+    for answer in client.send_command(command, completer):
+        if isinstance(answer, str):
+            outputs.append(answer)
+        elif isinstance(answer, bytes):
+            outputs.append(answer.decode())
+        else:
+            outputs.append("".join(text for _, text in answer))
+    return "\n".join(outputs)
+
+
+def _scanned_keys(output):
+    keys = []
+    for line in output.splitlines():
+        matched = KEY_LINE_RE.match(line)
+        if matched:
+            keys.append(matched.group(2))
+    return keys
+
+
+def test_pattern_add_list_rm(iredis_client, config, tmp_path):
+    config.iredisrc = str(tmp_path / "iredisrc")
+
+    out = _run_client_command(iredis_client, "PATTERN")
+    assert "No pattern group yet" in out
+
+    out = _run_client_command(iredis_client, "PATTERN ADD users user:*")
+    assert "users" in out
+    assert "user:*" in out
+    assert config.patterns == {"users": "user:*"}
+    assert "users = user:*" in (tmp_path / "iredisrc").read_text()
+
+    out = _run_client_command(iredis_client, "pattern add queues queue:*")
+    assert config.patterns == {"users": "user:*", "queues": "queue:*"}
+
+    out = _run_client_command(iredis_client, "PATTERN")
+    assert "users" in out
+    assert "queue:*" in out
+
+    out = _run_client_command(iredis_client, "PATTERN RM queues")
+    assert config.patterns == {"users": "user:*"}
+    assert "queue:*" not in (tmp_path / "iredisrc").read_text()
+
+    out = _run_client_command(iredis_client, "PATTERN RM queues")
+    assert "doesn't exist" in out
+
+
+def test_pattern_add_reserved_name(iredis_client, config, tmp_path):
+    config.iredisrc = str(tmp_path / "iredisrc")
+    out = _run_client_command(iredis_client, "PATTERN ADD rm foo:*")
+    assert "can't be used" in out
+    assert config.patterns == {}
+
+
+def test_pattern_scan_unknown_group(iredis_client, config):
+    out = _run_client_command(iredis_client, "PATTERN nosuch")
+    assert "doesn't exist" in out
+
+
+def test_pattern_scan_in_batches_until_finished(
+    iredis_client, clean_redis, config, tmp_path
+):
+    config.iredisrc = str(tmp_path / "iredisrc")
+    pipeline = clean_redis.pipeline()
+    for i in range(5000):
+        pipeline.set(f"user:{i}", i)
+    pipeline.lpush("queue:1", "foo")
+    pipeline.execute()
+
+    completer = IRedisCompleter()
+    _run_client_command(iredis_client, "PATTERN ADD users user:*", completer)
+
+    scanned = []
+    batches = 0
+    while True:
+        out = _run_client_command(iredis_client, "PATTERN users", completer)
+        batches += 1
+        scanned.extend(_scanned_keys(out))
+        if "scan finished" in out:
+            break
+        assert "continue scanning" in out
+        assert iredis_client.pattern_cursors[(15, "users")] > 0
+        assert batches < 100
+
+    # SCAN guarantees every key of a stable keyspace is returned
+    assert set(scanned) == {f"user:{i}" for i in range(5000)}
+    # 5000 keys can't fit in one batch
+    assert batches > 1
+    # cursor state is cleaned after a full iteration
+    assert iredis_client.pattern_cursors == {}
+    # scanned keys are fed into the key completer
+    assert scanned[-1] in completer.key_completer.words
+
+
+def test_pattern_scan_restart_with_explicit_cursor(
+    iredis_client, clean_redis, config, tmp_path
+):
+    config.iredisrc = str(tmp_path / "iredisrc")
+    pipeline = clean_redis.pipeline()
+    for i in range(5000):
+        pipeline.set(f"user:{i}", i)
+    pipeline.execute()
+
+    _run_client_command(iredis_client, "PATTERN ADD users user:*")
+
+    first = _scanned_keys(_run_client_command(iredis_client, "PATTERN users"))
+    assert iredis_client.pattern_cursors[(15, "users")] > 0
+    # explicit cursor 0 restarts the scan instead of continuing
+    restarted = _scanned_keys(_run_client_command(iredis_client, "PATTERN users 0"))
+    assert first == restarted
+
+
+def test_pattern_groups_loaded_from_config_file(config, tmp_path):
+    iredisrc = tmp_path / "iredisrc"
+    iredisrc.write_text("[patterns]\nusers = user:*\nsessions = 'session-*'\n")
+    load_config_files(str(iredisrc))
+    assert config.patterns == {"users": "user:*", "sessions": "session-*"}
+    assert config.iredisrc == str(iredisrc)

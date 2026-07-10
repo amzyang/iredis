@@ -50,6 +50,12 @@ like `KEYS *` (see
   `get`/`lrange`/`sscan`, etc, depending on types. You don't need to call the
   `type` command then type another command to get the value. `peek` will also
   display the key's length and memory usage.
+- `pattern` command to manage named key-pattern groups (saved in `iredisrc`)
+  and browse the keys matching a group. `PATTERN ADD users user:*` saves a
+  group, then `PATTERN users` scans a batch of matching keys along with their
+  types; run it again to continue scanning from the last cursor, no need to
+  copy cursors around. Scanned keys also feed the completion of the following
+  commands' key argument.
 - <kbd>Ctrl</kbd> + <kbd>C</kbd> to cancel the current typed command, this won't
   exit IRedis, exactly like bash behaviour. Use <kbd>Ctrl</kbd> + <kbd>D</kbd>
   to send a EOF to exit IRedis.

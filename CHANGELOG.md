@@ -1,5 +1,11 @@
 ## UPCOMING
 
+- Feature: new `PATTERN` command to manage named key-pattern groups and browse
+  matching keys. `PATTERN ADD <group> <pattern>` saves a group to `iredisrc`
+  (`[patterns]` section), `PATTERN <group>` scans a batch of matching keys with
+  their types, run it again to continue scanning from the last cursor;
+  `PATTERN` lists groups and `PATTERN RM <group>` deletes one. Scanned keys
+  feed key completion for the following commands.
 - Bugfix: the bottom bar syntax do not show `token` like `MATCH`, `COUNT`, `TYPE`.
 - Bugfix: replace the `open_text` API with `files()`.
 - Dependency: Add support for Python 3.13, drop support for Python 3.8 and 3.9.
