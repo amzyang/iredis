@@ -68,6 +68,9 @@ class Config:
 
         self.prompt = None
 
+        # color theme, default follows the terminal's color palette
+        self.theme = None
+
     def __setter__(self, name, value):
         # for every time start a transaction
         # clear the queued commands first
@@ -131,5 +134,6 @@ def load_config_files(iredisrc):
     config.enable_pager = config_obj["main"].as_bool("enable_pager")
     config.prompt = config_obj["main"].get("prompt")
     config.greetings = config_obj["main"].as_bool("greetings")
+    config.theme = config_obj["main"].get("theme")
 
     return config_obj

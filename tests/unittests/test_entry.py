@@ -93,6 +93,39 @@ def test_command_shell_options_higher_priority():
     assert config.shell is True
 
 
+def test_command_with_theme():
+    from iredis.config import config
+
+    gather_args.main(["iredis"], standalone_mode=False)
+    assert config.theme == "default"
+
+    gather_args.main(["iredis", "--theme", "classic"], standalone_mode=False)
+    assert config.theme == "classic"
+
+
+def test_command_theme_options_higher_priority():
+    from iredis.config import config
+    from textwrap import dedent
+
+    config_content = dedent(
+        """
+        [main]
+        theme = classic
+        """
+    )
+    with open("/tmp/iredisrc", "w+") as etc_config:
+        etc_config.write(config_content)
+
+    gather_args.main(["iredis", "--iredisrc", "/tmp/iredisrc"], standalone_mode=False)
+    assert config.theme == "classic"
+
+    gather_args.main(
+        ["iredis", "--theme", "default", "--iredisrc", "/tmp/iredisrc"],
+        standalone_mode=False,
+    )
+    assert config.theme == "default"
+
+
 @pytest.mark.parametrize(
     "url,dsn",
     [

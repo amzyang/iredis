@@ -17,7 +17,7 @@ from prompt_toolkit.key_binding.bindings.named_commands import (
 
 from .client import Client
 from .key_bindings import kb as key_bindings
-from .style import STYLE
+from .style import THEMES, get_style
 from .config import config, load_config_files
 from .processors import UserInputCommand, UpdateBottomProcessor, PasswordProcessor
 from .bottom import BottomToolbar
@@ -116,7 +116,7 @@ def write_result(text, max_height=None):
         sys.stdout.buffer.write(text)
         sys.stdout.write("\n")
     else:
-        print_formatted_text(text, end="", style=STYLE)
+        print_formatted_text(text, end="", style=get_style(config.theme))
         print_formatted_text()
 
 
@@ -235,6 +235,11 @@ Use Redis URL to indicate connection(Can set with env `IREDIS_URL`), Example:
     unix://[[username]:[password]]@/path/to/socket.sock?db=0
 """
 SHELL = """Allow to run shell commands, default to True."""
+THEME_HELP = """
+Color theme. "default" only uses your terminal's ANSI colors, so iredis \
+looks consistent with your terminal color scheme; "classic" is the original \
+iredis color scheme with hardcoded colors.
+"""
 PAGER_HELP = """Using pager when output is too tall for your window, default to True."""
 VERIFY_SSL_HELP = """Set the TLS certificate verification strategy"""
 
@@ -275,6 +280,9 @@ VERIFY_SSL_HELP = """Set the TLS certificate verification strategy"""
 @click.option("--client_name", help="Assign a name to the current connection.")
 @click.option("--raw/--no-raw", default=None, is_flag=True, help=RAW_HELP)
 @click.option("--rainbow/--no-rainbow", default=None, is_flag=True, help=RAINBOW)
+@click.option(
+    "--theme", default=None, type=click.Choice(sorted(THEMES)), help=THEME_HELP
+)
 @click.option("--shell/--no-shell", default=None, is_flag=True, help=SHELL)
 @click.option("--pager/--no-pager", default=None, is_flag=True, help=PAGER_HELP)
 @click.option(
@@ -321,6 +329,7 @@ def gather_args(
     decode,
     raw,
     rainbow,
+    theme,
     cmd,
     dsn,
     url,
@@ -368,6 +377,8 @@ def gather_args(
         config.decode = decode
     if rainbow is not None:
         config.rainbow = rainbow
+    if theme is not None:
+        config.theme = theme
     if shell is not None:
         config.shell = shell
     if pager is not None:
@@ -511,7 +522,7 @@ def main():
     # prompt session
     session = PromptSession(
         history=SkipAuthFileHistory(Path(os.path.expanduser(config.history_location))),
-        style=STYLE,
+        style=get_style(config.theme),
         auto_suggest=AutoSuggestFromHistory(),
         complete_while_typing=True,
         lexer=IRedisLexer(),

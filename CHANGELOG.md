@@ -1,5 +1,9 @@
 ## UPCOMING
 
+- Feature: support color themes, via `--theme` option or `theme` in iredisrc. The
+  new `default` theme only uses the terminal's ANSI colors, so iredis's style stays
+  consistent with the terminal color scheme; the original hardcoded color scheme is
+  kept as the `classic` theme.
 - Bugfix: the bottom bar syntax do not show `token` like `MATCH`, `COUNT`, `TYPE`.
 - Bugfix: replace the `open_text` API with `files()`.
 - Dependency: Add support for Python 3.13, drop support for Python 3.8 and 3.9.

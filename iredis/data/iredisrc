@@ -17,6 +17,14 @@ newbie_mode = False
 # show prompt in a ranibow color
 rainbow = False
 
+# color theme of iredis, supported themes:
+#   default: only use the terminal's ANSI colors, so iredis's style stays
+#            consistent with your terminal color scheme (works well on both
+#            dark and light backgrounds)
+#   classic: the original iredis color scheme, hardcoded 24-bit colors,
+#            looks the same on every terminal
+theme = default
+
 # retry times for connection error and timeout
 retry_times = 2
 

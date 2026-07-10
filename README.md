@@ -65,6 +65,9 @@ like `KEYS *` (see
   download and run, it just works, even you don't have a Python interpreter.
 - You can change the cli prompt using `--prompt` option or set via `~/.iredisrc`
   config file.
+- Theme support via `--theme` option or `theme` in `~/.iredisrc`: the `default`
+  theme only uses your terminal's ANSI colors so IRedis looks consistent with
+  your terminal color scheme; use `classic` for the original IRedis colors.
 - Hide password for `AUTH` command.
 - Says "Goodbye!" to you when you exit!
 - For full features, please see: [iredis.xbin.io](https://www.iredis.xbin.io)
@@ -189,6 +192,12 @@ Options:
                                   STDOUT is not a tty.
 
   --rainbow / --no-rainbow        Display colorful prompt.
+  --theme [classic|default]       Color theme. "default" only uses your
+                                  terminal's ANSI colors, so iredis looks
+                                  consistent with your terminal color scheme;
+                                  "classic" is the original iredis color
+                                  scheme with hardcoded colors.
+
   --shell / --no-shell            Allow to run shell commands, default to
                                   True.
 
