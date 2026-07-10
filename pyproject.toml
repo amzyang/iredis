@@ -49,6 +49,7 @@ freezegun = "^1.4.0"
 pytest = ">=7.2,<10.0"
 pexpect = "^4.7"
 black = "26.3.1"
+pyte = ">=0.8"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

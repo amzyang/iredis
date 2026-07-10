@@ -265,6 +265,8 @@ class Client:
             yield from self.do_pattern_add(*args)
         if command == "PATTERN RM":
             yield from self.do_pattern_rm(*args)
+        if command == "PATTERN BROWSE":
+            yield from self.do_pattern_browse(*args)
         if command == "CLEAR":
             clear()
         if command == "EXIT":
@@ -795,7 +797,7 @@ class Client:
         yield FormattedText(flat_formatted_text_pair)
 
     # PATTERN group names that collide with PATTERN's own subcommands
-    PATTERN_RESERVED_NAMES = ("ADD", "RM")
+    PATTERN_RESERVED_NAMES = ("ADD", "RM", "BROWSE")
     # stop scanning early once a batch collected this many keys
     PATTERN_BATCH_SIZE = 100
 
@@ -804,6 +806,37 @@ class Client:
             yield convert_formatted_text_to_bytes(formatted_text_tuples)
             return
         yield FormattedText(formatted_text_tuples)
+
+    def scan_keys(self, pattern, cursor=0):
+        """
+        SCAN keys matching pattern, one batch (~PATTERN_BATCH_SIZE keys) per
+        call, returns (keys, next_cursor). next_cursor is 0 when the full
+        keyspace iteration finished.
+        """
+        keys = []
+        count_hint = 100
+        iterations = 0
+        while True:
+            resp = self.execute("SCAN", cursor, "MATCH", pattern, "COUNT", count_hint)
+            cursor = int(resp[0])
+            keys.extend(resp[1])
+            iterations += 1
+            if cursor == 0:
+                break
+            if len(keys) >= self.PATTERN_BATCH_SIZE:
+                break
+            # safety guard for pathological cases, keep the REPL responsive
+            if iterations >= 1000:
+                break
+            # like Medis: for sparse patterns, raise COUNT to reduce
+            # round-trips to the server
+            if len(keys) < 10:
+                count_hint = 5000
+            elif len(keys) < 50:
+                count_hint = 2000
+            else:
+                count_hint = 1000
+        return keys, cursor
 
     def do_pattern(self, name=None, cursor=None):
         """
@@ -853,29 +886,7 @@ class Client:
             cursor = int(cursor)
             continued = False
 
-        keys = []
-        count_hint = 100
-        iterations = 0
-        while True:
-            resp = self.execute("SCAN", cursor, "MATCH", pattern, "COUNT", count_hint)
-            cursor = int(resp[0])
-            keys.extend(resp[1])
-            iterations += 1
-            if cursor == 0:
-                break
-            if len(keys) >= self.PATTERN_BATCH_SIZE:
-                break
-            # safety guard for pathological cases, keep the REPL responsive
-            if iterations >= 1000:
-                break
-            # like Medis: for sparse patterns, raise COUNT to reduce
-            # round-trips to the server
-            if len(keys) < 10:
-                count_hint = 5000
-            elif len(keys) < 50:
-                count_hint = 2000
-            else:
-                count_hint = 1000
+        keys, cursor = self.scan_keys(pattern, cursor)
 
         if cursor:
             self.pattern_cursors[state_key] = cursor
@@ -929,6 +940,35 @@ class Client:
         for key in keys:
             self.connection.send_command("TYPE", key)
         return [nativestr(self.connection.read_response()) for _ in keys]
+
+    def do_pattern_browse(self, name=None):
+        if not name:
+            yield "Usage: PATTERN BROWSE <group>"
+            return
+        pattern = config.patterns.get(name)
+        if pattern is None:
+            groups_hint = ", ".join(config.patterns) or "<empty>"
+            yield (
+                f"Pattern group '{name}' doesn't exist. Saved groups:"
+                f" {groups_hint}. Use `PATTERN ADD {name} <pattern>` to"
+                " create it."
+            )
+            return
+        if config.raw or not sys.stdout.isatty():
+            yield "PATTERN BROWSE needs an interactive terminal, no --raw or pipes."
+            return
+
+        # local import: keep REPL startup free of layout modules
+        from .browser import PatternBrowser
+
+        browser = PatternBrowser(self, name, pattern)
+        picked = browser.run()
+        # like PATTERN scan, browsed keys feed the key completer
+        if self._completer and browser.seen_keys:
+            self._completer.key_completer.touch_words(browser.seen_keys)
+        if picked is not None:
+            # leave a record of the picked key in the REPL scrollback
+            yield from self.do_peek(picked)
 
     def do_pattern_add(self, name=None, pattern=None):
         if not name or not pattern:

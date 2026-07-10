@@ -56,6 +56,12 @@ like `KEYS *` (see
   types; run it again to continue scanning from the last cursor, no need to
   copy cursors around. Scanned keys also feed the completion of the following
   commands' key argument.
+- `PATTERN BROWSE <group>` opens an interactive dual-pane key browser (on the
+  terminal's alternate screen, your scrollback stays untouched):
+  <kbd>↑</kbd>/<kbd>↓</kbd> to move the selection, the right pane shows the
+  selected key's `PEEK` detail, <kbd>Space</kbd> scans more keys,
+  <kbd>Tab</kbd> toggles the detail pane, <kbd>d</kbd><kbd>d</kbd> deletes,
+  <kbd>Enter</kbd> exits and peeks the picked key back in the REPL.
 - <kbd>Ctrl</kbd> + <kbd>C</kbd> to cancel the current typed command, this won't
   exit IRedis, exactly like bash behaviour. Use <kbd>Ctrl</kbd> + <kbd>D</kbd>
   to send a EOF to exit IRedis.
