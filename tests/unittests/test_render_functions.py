@@ -490,3 +490,18 @@ def test_render_help(config):
     assert renders.OutputRender.render_help([b"foo", b"bar"]) == FormattedText(
         [("class:string", "foo\nbar")]
     )
+
+
+def test_render_slowlog_with_unknown_server_version(config):
+    """regression: version_parse crashed on unknown version, iredis issue
+
+    packaging>=22 raises InvalidVersion for non-PEP440 strings, so an
+    unknown server version (no_info=True) must not reach version_parse.
+    """
+    config.version = None
+    slowlog = [[b"1", 1611749924, 3, [b"GET", b"foo"], b"127.0.0.1:12345", b""]]
+
+    result = strip_formatted_text(renders.OutputRender.render_slowlog(slowlog))
+
+    assert "Slow log id" in result
+    assert "Client IP and port" not in result

@@ -66,7 +66,8 @@ class Config:
         self.transaction = False
         # display zset withscores?
         self.withscores = False
-        self.version = "Unknown"
+        # detected redis-server version, None means unknown
+        self.version = None
 
         self.greetings = True
 

@@ -59,7 +59,7 @@ def greetings():
     else:
         reason = ""
 
-    server_version = f"redis-server  {config.version} {reason}"
+    server_version = f"redis-server  {config.version or 'Unknown'} {reason}"
     home_page = "Home:   https://iredis.xbin.io/"
     issues = "Issues: https://github.com/laixintao/iredis/issues"
     display = "\n".join([iredis_version, server_version, home_page, issues])
