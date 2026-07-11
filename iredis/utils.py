@@ -11,6 +11,13 @@ from iredis.exceptions import InvalidArguments
 
 logger = logging.getLogger(__name__)
 
+# a lone \x1b is also the prefix of arrow-key escape sequences, so
+# prompt_toolkit waits `Application.ttimeoutlen` (default 0.5s) before
+# treating it as the Esc key -- too laggy for vi mode and the key browser;
+# a real sequence's bytes arrive in one burst, so 50ms is enough to tell
+# them apart
+ESCAPE_FLUSH_TIMEOUT = 0.05
+
 _last_timer = time.time()
 _timer_counter = 0
 separator = re.compile(r"\s")

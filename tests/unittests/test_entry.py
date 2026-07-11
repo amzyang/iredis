@@ -7,6 +7,7 @@ from prompt_toolkit.formatted_text import FormattedText
 
 from iredis.entry import (
     SkipAuthFileHistory,
+    create_prompt_session,
     gather_args,
     greetings,
     is_too_tall,
@@ -163,6 +164,18 @@ def test_command_vi_options_higher_priority():
         standalone_mode=False,
     )
     assert config.vi_mode is False
+
+
+def test_prompt_session_flushes_escape_key_quickly():
+    from prompt_toolkit.application import create_app_session
+    from prompt_toolkit.input import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+
+    gather_args.main(["iredis", "--vi"], standalone_mode=False)
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            session = create_prompt_session()
+    assert session.app.ttimeoutlen <= 0.1
 
 
 @pytest.mark.parametrize(
