@@ -2,6 +2,7 @@ import sys
 import tempfile
 from unittest.mock import patch
 
+import click
 import pytest
 from prompt_toolkit.formatted_text import FormattedText
 
@@ -442,3 +443,67 @@ def test_shell_completion_completes_options(monkeypatch, capsys):
     with pytest.raises(SystemExit):
         main()
     assert "--theme" in capsys.readouterr().out
+
+
+def test_decode_rejects_invalid_encoding():
+    with pytest.raises(click.exceptions.BadParameter):
+        gather_args.main(["iredis", "--decode", "not-a-codec"], standalone_mode=False)
+
+
+def test_decode_accepts_codec_alias(config):
+    gather_args.main(["iredis", "--decode", "u8"], standalone_mode=False)
+    assert config.decode == "u8"
+
+
+def test_main_invalid_decode_shows_error_not_traceback(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["iredis", "--decode", "bogus"])
+    main()
+    assert "Invalid value" in capsys.readouterr().err
+
+
+def _complete(monkeypatch, comp_words, comp_cword):
+    monkeypatch.setattr(sys, "argv", ["iredis"])
+    monkeypatch.setenv("_IREDIS_COMPLETE", "zsh_complete")
+    monkeypatch.setenv("COMP_WORDS", comp_words)
+    monkeypatch.setenv("COMP_CWORD", comp_cword)
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+    return exc_info.value.code
+
+
+def test_shell_completion_decode_suggests_encodings(monkeypatch, capsys):
+    _complete(monkeypatch, "iredis --decode", "2")
+    assert "utf-8" in capsys.readouterr().out
+
+
+def test_shell_completion_decode_filters_by_prefix(monkeypatch, capsys):
+    _complete(monkeypatch, "iredis --decode gb", "2")
+    out = capsys.readouterr().out
+    assert "gbk" in out
+    assert "gb18030" in out
+    assert "utf-8" not in out
+
+
+def test_shell_completion_dsn_reads_aliases_from_iredisrc(
+    monkeypatch, capsys, tmp_path
+):
+    iredisrc = tmp_path / "iredisrc"
+    iredisrc.write_text("[alias_dsn]\ndev = redis://localhost:6379/0\n")
+    monkeypatch.chdir(tmp_path)
+    _complete(monkeypatch, f"iredis --iredisrc {iredisrc} --dsn", "4")
+    assert "dev" in capsys.readouterr().out
+
+
+def test_shell_completion_dsn_missing_config_is_silent(monkeypatch, capsys, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    exit_code = _complete(
+        monkeypatch, "iredis --iredisrc /nonexistent/iredisrc --dsn", "4"
+    )
+    assert exit_code == 0
+    assert capsys.readouterr().out.strip() == ""
+
+
+@pytest.mark.parametrize("option", ["--iredisrc", "--socket"])
+def test_shell_completion_path_options_use_file_type(monkeypatch, capsys, option):
+    _complete(monkeypatch, f"iredis {option}", "2")
+    assert "file" in capsys.readouterr().out

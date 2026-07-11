@@ -1,3 +1,4 @@
+import codecs
 import logging
 import os
 import platform
@@ -19,7 +20,13 @@ from . import __version__
 from .bottom import BottomToolbar
 from .client import Client
 from .completers import IRedisCompleter
-from .config import config, load_config_files
+from .config import (
+    config,
+    load_config_files,
+    pwd_config_file,
+    read_config_file,
+    system_config_file,
+)
 from .key_bindings import kb as key_bindings
 from .lexer import IRedisLexer
 from .processors import PasswordProcessor, UpdateBottomProcessor, UserInputCommand
@@ -228,7 +235,8 @@ However, you can use --no-raw to force formatted output even \
 when STDOUT is not a tty.
 """
 DECODE_HELP = """
-decode response, default is No decode, which will output all bytes literals.
+decode response, default is No decode, which will output all bytes literals. \
+Accepts any Python codec name or alias (e.g. utf-8, gbk, latin-1).
 """
 RAINBOW = "Display colorful prompt."
 VI_HELP = """Use vi keybindings to edit the input, like `set -o vi` in bash."""
@@ -253,6 +261,48 @@ flavor; frappe, macchiato and mocha are progressively darker.
 PAGER_HELP = """Using pager when output is too tall for your window, default to True."""
 VERIFY_SSL_HELP = """Set the TLS certificate verification strategy"""
 
+COMMON_DECODE_ENCODINGS = [
+    "ascii",
+    "big5",
+    "cp1252",
+    "euc-jp",
+    "euc-kr",
+    "gb18030",
+    "gbk",
+    "latin-1",
+    "shift-jis",
+    "utf-8",
+    "utf-16",
+]
+
+
+def validate_decode(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return value
+    try:
+        codecs.lookup(value)
+    except LookupError:
+        raise click.BadParameter(f"unknown encoding: {value}")
+    return value
+
+
+def complete_decode(ctx, param, incomplete):
+    return [e for e in COMMON_DECODE_ENCODINGS if e.startswith(incomplete.lower())]
+
+
+def complete_dsn(ctx, param, incomplete):
+    # completion callbacks must never raise or print
+    try:
+        iredisrc = ctx.params.get("iredisrc") or "~/.iredisrc"
+        aliases = {}
+        for f in [system_config_file, iredisrc, pwd_config_file]:
+            parsed = read_config_file(f)
+            if parsed:
+                aliases.update(parsed.get("alias_dsn") or {})
+        return sorted(a for a in aliases if a.startswith(incomplete))
+    except Exception:
+        return []
+
 
 # command line entry here...
 @click.command()
@@ -260,7 +310,11 @@ VERIFY_SSL_HELP = """Set the TLS certificate verification strategy"""
 @click.option("-h", help="Server hostname (default: 127.0.0.1).", default="127.0.0.1")
 @click.option("-p", help="Server port (default: 6379).", default="6379")
 @click.option(
-    "-s", "--socket", default=None, help="Server socket (overrides hostname and port)."
+    "-s",
+    "--socket",
+    default=None,
+    type=click.Path(),
+    help="Server socket (overrides hostname and port).",
 )
 @click.option("-n", help="Database number.(overwrites dsn/url's db number)", default=0)
 @click.option(
@@ -270,7 +324,14 @@ VERIFY_SSL_HELP = """Set the TLS certificate verification strategy"""
 )
 @click.option("-a", "--password", help="Password to use when connecting to the server.")
 @click.option("--url", default=None, envvar="IREDIS_URL", help=URL_HELP)
-@click.option("-d", "--dsn", default=None, envvar="IREDIS_DSN", help=DSN_HELP)
+@click.option(
+    "-d",
+    "--dsn",
+    default=None,
+    envvar="IREDIS_DSN",
+    shell_complete=complete_dsn,
+    help=DSN_HELP,
+)
 @click.option(
     "--newbie/--no-newbie",
     default=None,
@@ -281,12 +342,19 @@ VERIFY_SSL_HELP = """Set the TLS certificate verification strategy"""
     "--iredisrc",
     default="~/.iredisrc",
     envvar="IREDIS_CONFIG",
+    type=click.Path(),
     help=(
         "Config file for iredis, default is ~/.iredisrc. "
         "You can also set config path via environment variable `IREDIS_CONFIG`."
     ),
 )
-@click.option("--decode", default=None, help=DECODE_HELP)
+@click.option(
+    "--decode",
+    default=None,
+    callback=validate_decode,
+    shell_complete=complete_decode,
+    help=DECODE_HELP,
+)
 @click.option("--client_name", help="Assign a name to the current connection.")
 @click.option("--raw/--no-raw", default=None, is_flag=True, help=RAW_HELP)
 @click.option("--rainbow/--no-rainbow", default=None, is_flag=True, help=RAINBOW)
@@ -533,6 +601,8 @@ def main():
             # like redis-cli
             print_help_msg(gather_args)
         return
+    except click.exceptions.UsageError as e:
+        e.show()
     if not ctx:  # called help
         return
 
