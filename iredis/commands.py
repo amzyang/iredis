@@ -140,12 +140,15 @@ commands_summary.update(
         },
         "PATTERN BROWSE": {
             "summary": (
-                "Browse a pattern group's keys in an interactive dual-pane"
-                " view: Up/Down to select, Space to scan more, Tab to toggle"
-                " the detail pane, Enter to peek the key back in the REPL."
-                " Press F3 on an empty prompt as a shortcut."
+                "Browse keys in an interactive dual-pane view, grouped into"
+                " a collapsible tree by `:` namespaces. Without argument"
+                " browse the whole keyspace, with a group name browse the"
+                " group's pattern. Up/Down to select, Left/Right to"
+                " fold/unfold, Space to scan more, Tab to toggle the detail"
+                " pane, Enter to peek the key back in the REPL. Press F3 on"
+                " an empty prompt as a shortcut."
             ),
-            "arguments": [{"name": "group", "type": "string"}],
+            "arguments": [{"name": "group", "type": "string", "optional": True}],
             "complexity": "O(1) for every scan.",
             "since": "1.16",
             "group": "iredis",

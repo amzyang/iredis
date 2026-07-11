@@ -382,6 +382,7 @@ GRAMMAR = {
     "command_patternnamex_cursorx": rf"(\s+ {PATTERN_NAME} (\s+ {CURSOR})?)? \s*",
     "command_patternname_pattern": rf"\s+ {PATTERN_NAME} \s+ {PATTERN} \s*",
     "command_patternname": rf"\s+ {PATTERN_NAME} \s*",
+    "command_patternnamex": rf"(\s+ {PATTERN_NAME})? \s*",
     "command_command": rf"\s+ {COMMAND} \s*",
     "command_slots": rf"\s+ {SLOTS} \s*",
     "command_node": rf"\s+ {NODE} \s*",

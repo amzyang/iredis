@@ -28,3 +28,11 @@ def test_pattern_rm(judge_command):
     judge_command(
         "PATTERN RM users", {"command": "PATTERN RM", "pattern_name": "users"}
     )
+
+
+def test_pattern_browse(judge_command):
+    judge_command("PATTERN BROWSE", {"command": "PATTERN BROWSE"})
+    judge_command(
+        "PATTERN BROWSE users",
+        {"command": "PATTERN BROWSE", "pattern_name": "users"},
+    )

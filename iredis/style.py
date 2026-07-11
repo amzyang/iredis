@@ -71,6 +71,13 @@ DEFAULT_UI = {
     "error": "ansired bold",
     "type": "ansibrightblack",
     "channel": "ansibrightblack",
+    # key browser: per-type colors in the key tree
+    "type-string": "ansigreen",
+    "type-list": "ansicyan",
+    "type-set": "ansiyellow",
+    "type-hash": "ansimagenta",
+    "type-zset": "ansired",
+    "type-stream": "ansiblue",
     # bottom-toolbar
     "bottom-toolbar": "bg:ansiblack ansigray",
     "bottom-toolbar.on": "bg:ansiblack ansiwhite",
@@ -138,6 +145,13 @@ CLASSIC_UI = {
     "error": "#ff005f bold",
     "type": "#888",
     "channel": "#888",  # FIXME
+    # key browser: per-type colors in the key tree
+    "type-string": "#33aa33",
+    "type-list": "#00afaf",
+    "type-set": "#bc7a00",
+    "type-hash": "#aa22ff",
+    "type-zset": "#d2413a",
+    "type-stream": "#4444aa",
     # colors below copied from mycli project, ~~love~~
     # bottom-toolbar
     "bottom-toolbar": "bg:#222222 #aaaaaa",
@@ -327,6 +341,13 @@ def _catppuccin_theme(p):
         "error": f"{p['red']} bold",
         "type": p["overlay1"],
         "channel": p["overlay1"],
+        # key browser: per-type colors in the key tree
+        "type-string": p["green"],
+        "type-list": p["teal"],
+        "type-set": p["yellow"],
+        "type-hash": p["mauve"],
+        "type-zset": p["red"],
+        "type-stream": p["blue"],
         # bottom-toolbar
         "bottom-toolbar": f"bg:{p['mantle']} {p['subtext0']}",
         "bottom-toolbar.on": f"bg:{p['mantle']} {p['text']}",

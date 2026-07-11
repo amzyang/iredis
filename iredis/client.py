@@ -1032,13 +1032,14 @@ class Client:
         )
 
     def do_pattern_browse(self, name=None):
-        if not name:
-            yield "Usage: PATTERN BROWSE <group>"
-            return
-        pattern = config.patterns.get(name)
-        if pattern is None:
-            yield self._missing_group_hint(name)
-            return
+        if name is None:
+            # bare BROWSE: sidebar over the whole keyspace, like Medis
+            pattern = "*"
+        else:
+            pattern = config.patterns.get(name)
+            if pattern is None:
+                yield self._missing_group_hint(name)
+                return
         if config.raw or not sys.stdout.isatty():
             yield "PATTERN BROWSE needs an interactive terminal, no --raw or pipes."
             return
@@ -1046,7 +1047,7 @@ class Client:
         # local import: keep REPL startup free of layout modules
         from .browser import PatternBrowser
 
-        browser = PatternBrowser(self, name, pattern)
+        browser = PatternBrowser(self, name or "*", pattern)
         picked = browser.run()
         # like PATTERN scan, browsed keys feed the key completer
         if self._completer and browser.seen_keys:

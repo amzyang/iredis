@@ -769,6 +769,13 @@ def test_pattern_browse_unknown_group_without_saved_groups(iredis_client, config
     assert "PATTERN ADD nosuch" not in out
 
 
+def test_pattern_browse_without_group_browses_whole_keyspace(iredis_client, config):
+    # bare BROWSE targets `*`; under pytest stdout is not a tty, so it
+    # stops at the tty guard instead of complaining about usage
+    out = _run_client_command(iredis_client, "PATTERN BROWSE")
+    assert "needs an interactive terminal" in out
+
+
 def test_pattern_unknown_group_lists_saved_groups(iredis_client, config):
     config.patterns = {"users": "user:*"}
     out = _run_client_command(iredis_client, "PATTERN nosuch")
