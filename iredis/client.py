@@ -748,10 +748,9 @@ class Client:
         """
 
         def _string(key):
-            strlen = self.execute("strlen", key)
+            strlen, value = self._pipeline_execute(("strlen", key), ("get", key))
             yield FormattedText([("class:dockey", "strlen: "), ("", str(strlen))])
 
-            value = self.execute("GET", key)
             yield FormattedText(
                 [
                     ("class:dockey", "value: "),
@@ -825,20 +824,29 @@ class Client:
         # in case the result is too long, we yield only once so the outputer
         # can pager it.
         peek_response = []
-        key_type = nativestr(self.execute("type", key))
+        # `memory usage` to get memory, this command available from redis4.0
+        with_memory_usage = bool(
+            config.version and version_parse(config.version) >= version_parse("4.0.0")
+        )
+        metadata_commands = [("type", key), ("object encoding", key), ("ttl", key)]
+        if with_memory_usage:
+            metadata_commands.append(("memory usage", key))
+        # these commands are independent, pipeline them into one round-trip;
+        # errors kept in place: on a missing key only TYPE is meaningful
+        replies = self._pipeline_execute(*metadata_commands, raise_on_error=False)
+        if isinstance(replies[0], Exception):
+            raise replies[0]
+        key_type = nativestr(replies[0])
         if key_type == "none":
             yield f"{key} doesn't exist."
             return
+        for reply in replies[1:]:
+            if isinstance(reply, Exception):
+                raise reply
 
-        encoding = nativestr(self.execute("object encoding", key))
-
-        # use `memory usage` to get memory, this command available from redis4.0
-        mem = ""
-        if config.version and version_parse(config.version) >= version_parse("4.0.0"):
-            memory_usage_value = str(self.execute("memory usage", key))
-            mem = f"  mem: {memory_usage_value} bytes"
-
-        ttl = str(self.execute("ttl", key))
+        encoding = nativestr(replies[1])
+        ttl = str(replies[2])
+        mem = f"  mem: {replies[3]} bytes" if with_memory_usage else ""
 
         key_info = f"{key_type} ({encoding}){mem}, ttl: {ttl}"
 
@@ -910,6 +918,31 @@ class Client:
         for key in keys:
             self.connection.send_command("TYPE", key)
         return [nativestr(self.connection.read_response()) for _ in keys]
+
+    def _pipeline_execute(self, *commands, raise_on_error=True):
+        """Execute commands in one pipelined round-trip, return replies in order.
+
+        With raise_on_error=False, error replies are returned in place as
+        exception instances instead of raised, like redis-py pipelines.
+        """
+        for command in commands:
+            self.connection.send_command(*command)
+        replies = []
+        try:
+            for _ in commands:
+                try:
+                    replies.append(self.connection.read_response())
+                except ResponseError as error:
+                    replies.append(error)
+        except BaseException:
+            # unread replies would desync following commands on this connection
+            self.connection.disconnect()
+            raise
+        if raise_on_error:
+            for reply in replies:
+                if isinstance(reply, Exception):
+                    raise reply
+        return replies
 
     def do_browse(self, pattern=None):
         if pattern is None:

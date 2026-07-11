@@ -324,6 +324,17 @@ def test_peek_key_not_exist(iredis_client, clean_redis, config):
     assert peek_result == ["non-exist-key doesn't exist."]
 
 
+def test_peek_error_in_pipeline_keeps_connection_usable(
+    iredis_client, clean_redis, config
+):
+    # peeking a missing key makes OBJECT ENCODING error inside the pipelined
+    # batch; the connection must stay in sync for the next command
+    config.raw = False
+    clean_redis.set("foo", "bar")
+    list(iredis_client.do_peek("non-exist-key"))
+    assert iredis_client.execute("GET", "foo") == b"bar"
+
+
 def test_iredis_with_username():
     with patch("redis.connection.Connection.connect"):
         c = Client("127.0.0.1", "6379", username="abc", password="abc1")
