@@ -33,7 +33,7 @@ def setup_sentry(config_dsn=None, enabled=True, environ=os.environ):
     if not dsn:
         return False
     try:
-        import sentry_sdk
+        import sentry_sdk  # ty: ignore[unresolved-import]
     except ImportError:
         logger.info("sentry-sdk not installed, telemetry disabled")
         return False

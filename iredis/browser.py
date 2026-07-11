@@ -550,10 +550,11 @@ class KeyBrowser:
             self.notice = notice
             self._invalidate()
 
-        if self._app is None:
+        loop = self._app.loop if self._app else None
+        if loop is None:
             finish()
         else:
-            self._app.loop.call_soon_threadsafe(finish)
+            loop.call_soon_threadsafe(finish)
 
     def _page_size(self):
         return max(1, get_app().output.get_size().rows - CHROME_HEIGHT - 1)
