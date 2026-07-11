@@ -805,10 +805,16 @@ def test_pattern_scan_restart_with_explicit_cursor(
     _run_client_command(iredis_client, "PATTERN ADD users user:*")
 
     first = _scanned_keys(_run_client_command(iredis_client, "PATTERN users"))
+    assert first
     assert iredis_client.pattern_cursors[(15, "users")] > 0
-    # explicit cursor 0 restarts the scan instead of continuing
+
+    # explicit cursor 0 restarts the scan instead of continuing: a full
+    # iteration from the restart must cover every key. (Batch content is not
+    # comparable directly, SCAN's batch order changes under rehashing.)
     restarted = _scanned_keys(_run_client_command(iredis_client, "PATTERN users 0"))
-    assert first == restarted
+    while iredis_client.pattern_cursors.get((15, "users"), 0) != 0:
+        restarted += _scanned_keys(_run_client_command(iredis_client, "PATTERN users"))
+    assert set(restarted) == {f"user:{i}" for i in range(5000)}
 
 
 def test_pattern_groups_loaded_from_config_file(config, tmp_path):
