@@ -7,6 +7,7 @@ from prompt_toolkit.history import InMemoryHistory
 from iredis.browser import (
     KeyBrowser,
     RecentPatternCompleter,
+    normalize_pattern,
     single_chain_paths,
     tree_rows,
     value_text,
@@ -188,6 +189,36 @@ def test_browser_hjkl_navigation_behaviour():
 
 
 # === pattern input, history, recents menu ===
+
+
+def test_normalize_pattern_appends_trailing_star():
+    assert normalize_pattern("task:") == "task:*"
+    assert normalize_pattern("task:*") == "task:*"
+    assert normalize_pattern("   ") == "*"
+    assert normalize_pattern("*") == "*"
+
+
+def test_browser_initial_pattern_gets_trailing_star():
+    browser = make_browser(
+        [("task:1", "string"), ("task:2", "string")], pattern="task:"
+    )
+    assert browser.pattern == "task:*"
+    browser.client.scan_keys.assert_called_with("task:*", 0)
+    assert browser.pattern_buffer.text == "task:*"
+    assert list(browser.history.load_history_strings()) == ["task:*"]
+
+
+def test_browser_submit_pattern_appends_trailing_star():
+    browser = make_browser([("user:1", "string")])
+    browser.client.scan_keys.return_value = ([], 0)
+    browser.client._fetch_types.return_value = []
+    browser.pattern_buffer.text = "task:"
+
+    browser.submit_pattern()
+
+    assert browser.pattern == "task:*"
+    assert browser.pattern_buffer.text == "task:*"
+    assert "task:*" in list(browser.history.load_history_strings())
 
 
 def test_browser_records_initial_pattern_in_history():

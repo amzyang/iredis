@@ -58,7 +58,9 @@ like `KEYS *` (see
   argument it browses the whole keyspace; keys are grouped into a collapsible
   tree by `:` namespaces (like Medis' sidebar), scanned one batch at a time.
   Press <kbd>/</kbd> to edit the pattern in place — a menu pops up with
-  recently used patterns (saved next to the command history).
+  recently used patterns (saved next to the command history), and like a
+  searchbox, a pattern without a trailing `*` gets one appended (`task:`
+  browses `task:*`).
   <kbd>↑</kbd>/<kbd>↓</kbd> to move the selection, <kbd>←</kbd>/<kbd>→</kbd>
   to fold/unfold a group (vim <kbd>h</kbd><kbd>j</kbd><kbd>k</kbd><kbd>l</kbd>
   work too), the right pane shows the selected key's `PEEK` detail —

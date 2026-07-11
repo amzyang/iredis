@@ -174,6 +174,15 @@ def value_text(client, key, key_type):
     return "\n".join(items)
 
 
+def normalize_pattern(text):
+    """Empty input browses everything; like a searchbox, a pattern without
+    a trailing ``*`` gets one appended, so ``task:`` means ``task:*``."""
+    pattern = text.strip() or "*"
+    if not pattern.endswith("*"):
+        pattern += "*"
+    return pattern
+
+
 class RecentPatternCompleter(Completer):
     """Recently used BROWSE patterns, most recent first, like a searchbox's
     recents menu. Substring-matched against the typed text."""
@@ -197,6 +206,7 @@ class KeyBrowser:
     def __init__(self, client, pattern, history=None):
         self.client = client
         self.history = history or InMemoryHistory()
+        pattern = normalize_pattern(pattern)
         # record the REPL-given pattern in the recents, dupes of the last
         # run and the noise `*` excluded
         last = next(iter(self.history.load_history_strings()), None)
@@ -243,7 +253,7 @@ class KeyBrowser:
 
     def submit_pattern(self):
         """Apply the pattern box's text: record it and rescan."""
-        pattern = self.pattern_buffer.text.strip() or "*"
+        pattern = normalize_pattern(self.pattern_buffer.text)
         if pattern not in ("*", self.pattern):
             self.history.append_string(pattern)
         self.pattern_buffer.document = Document(pattern, len(pattern))
