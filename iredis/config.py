@@ -75,6 +75,10 @@ class Config:
 
         self.greetings = True
 
+        # crash telemetry via Sentry, see iredis/sentry.py
+        self.sentry = True
+        self.sentry_dsn = None
+
         self.prompt = None
 
         # color theme, default follows the terminal's color palette
@@ -140,6 +144,8 @@ def load_config_files(iredisrc):
     config.enable_pager = config_obj["main"].as_bool("enable_pager")
     config.prompt = config_obj["main"].get("prompt")
     config.greetings = config_obj["main"].as_bool("greetings")
+    config.sentry = config_obj["main"].as_bool("sentry")
+    config.sentry_dsn = config_obj["main"].get("sentry_dsn")
     config.theme = config_obj["main"].get("theme")
     config.iredisrc = os.path.expanduser(iredisrc)
     config.patterns = dict(config_obj.get("patterns", {}))

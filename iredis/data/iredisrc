@@ -101,6 +101,14 @@ history_location = ~/.iredis_history
 # can set to False to disable it.
 greetings = True
 
+# report iredis's own crashes to Sentry (never your commands or redis data).
+# Telemetry only activates when a DSN is available: the IREDIS_SENTRY_DSN
+# environment variable, sentry_dsn below, or a DSN stamped into release
+# builds. It also requires sentry-sdk (pip install iredis[sentry]).
+# Set sentry = False to opt out entirely.
+sentry = True
+sentry_dsn =
+
 [alias_dsn]
 # example_dsn = redis://[[username]:[password]]@localhost:6379/0
 # example_dsn = rediss://[[username]:[password]]@localhost:6379/0
