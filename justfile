@@ -41,3 +41,7 @@ upgrade:
 # 安装 pre-commit 钩子
 pre-commit:
     uv run pre-commit install
+
+# 发布新版本：bump 版本、commit、打 tag 并推送（触发 Homebrew 发布）
+release version:
+    bash scripts/release.sh {{version}}
