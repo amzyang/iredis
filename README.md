@@ -180,6 +180,11 @@ Fish: save the completion script to fish's completion directory:
 _IREDIS_COMPLETE=fish_source iredis > ~/.config/fish/completions/iredis.fish
 ```
 
+Besides option names, option values are completed too: `--theme` and
+`--verify-ssl` complete their choices, `--decode` suggests common encodings,
+`-d`/`--dsn` completes aliases from your iredisrc's `[alias_dsn]` section, and
+`--iredisrc`/`--socket` complete file paths.
+
 ## Usage
 
 Once you install IRedis, you will know how to use it. Just remember, IRedis
