@@ -140,8 +140,9 @@ def test_command_with_vi_mode():
 
 
 def test_command_vi_options_higher_priority():
-    from iredis.config import config
     from textwrap import dedent
+
+    from iredis.config import config
 
     config_content = dedent(
         """
