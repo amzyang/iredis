@@ -87,8 +87,15 @@ DEFAULT_UI = {
     "bottom-toolbar.complexity": "bg:ansiblack ansibrightblack",
     "bottom-toolbar.group": "bg:ansiblack ansired bold",
     # completion
-    "completion-menu.completion.current": "bg:ansiwhite ansiblack",
+    # prompt_toolkit's built-in UI style puts "reverse" on the current
+    # completion and dim gray on fuzzy-matched characters; both survive a
+    # plain color override and wreck our fg/bg pairs, so reset them here.
+    "completion-menu.completion.current": "bg:ansiwhite ansiblack noreverse",
     "completion-menu.completion": "bg:ansicyan ansiwhite",
+    "completion-menu.completion fuzzymatch.outside": "fg:ansiwhite",
+    "completion-menu.completion fuzzymatch.inside": "fg:ansiwhite bold",
+    "completion-menu.completion.current fuzzymatch.outside": "fg:ansiblack",
+    "completion-menu.completion.current fuzzymatch.inside": "fg:ansiblack",
     "completion-menu.meta.completion.current": "bg:ansibrightcyan ansiblack",
     "completion-menu.meta.completion": "bg:ansicyan ansiwhite",
     "completion-menu.multi-column-meta": "bg:ansibrightcyan ansiblack",
@@ -162,8 +169,13 @@ CLASSIC_UI = {
     "bottom-toolbar.complexity": "bg:#222222 #666666",
     "bottom-toolbar.group": "bg:#222222 #d2413a bold",
     # completion
-    "completion-menu.completion.current": "bg:#ffffff #000000",
+    # see DEFAULT_UI for why noreverse and the fuzzymatch overrides are needed
+    "completion-menu.completion.current": "bg:#ffffff #000000 noreverse",
     "completion-menu.completion": "bg:#008888 #ffffff",
+    "completion-menu.completion fuzzymatch.outside": "fg:#ffffff",
+    "completion-menu.completion fuzzymatch.inside": "fg:#ffffff bold",
+    "completion-menu.completion.current fuzzymatch.outside": "fg:#000000",
+    "completion-menu.completion.current fuzzymatch.inside": "fg:#000000",
     "completion-menu.meta.completion.current": "bg:#44aaaa #000000",
     "completion-menu.meta.completion": "bg:#448888 #ffffff",
     "completion-menu.multi-column-meta": "bg:#aaffff #000000",
@@ -357,8 +369,14 @@ def _catppuccin_theme(p):
         "bottom-toolbar.complexity": f"bg:{p['mantle']} {p['overlay0']}",
         "bottom-toolbar.group": f"bg:{p['mantle']} {p['red']} bold",
         # completion
-        "completion-menu.completion.current": f"bg:{p['blue']} {p['base']}",
+        # see DEFAULT_UI for why noreverse and the fuzzymatch overrides
+        # are needed
+        "completion-menu.completion.current": f"bg:{p['blue']} {p['base']} noreverse",
         "completion-menu.completion": f"bg:{p['surface0']} {p['text']}",
+        "completion-menu.completion fuzzymatch.outside": f"fg:{p['subtext0']}",
+        "completion-menu.completion fuzzymatch.inside": f"fg:{p['text']} bold",
+        "completion-menu.completion.current fuzzymatch.outside": f"fg:{p['base']}",
+        "completion-menu.completion.current fuzzymatch.inside": f"fg:{p['base']}",
         "completion-menu.meta.completion.current": f"bg:{p['surface1']} {p['text']}",
         "completion-menu.meta.completion": f"bg:{p['surface0']} {p['subtext0']}",
         "completion-menu.multi-column-meta": f"bg:{p['surface1']} {p['subtext1']}",
