@@ -880,11 +880,12 @@ class Client:
     # stop scanning early once a batch collected this many keys
     SCAN_BATCH_SIZE = 100
 
-    def scan_keys(self, pattern, cursor=0):
+    def scan_keys(self, pattern, cursor=0, stop_check=None):
         """
         SCAN keys matching pattern, one batch (~SCAN_BATCH_SIZE keys) per
         call, returns (keys, next_cursor). next_cursor is 0 when the full
-        keyspace iteration finished.
+        keyspace iteration finished. A truthy stop_check() aborts between
+        round-trips (the browser drains its worker on exit this way).
         """
         keys = []
         count_hint = 100
@@ -900,6 +901,8 @@ class Client:
                 break
             # safety guard for pathological cases, keep the REPL responsive
             if iterations >= 1000:
+                break
+            if stop_check and stop_check():
                 break
             # like Medis: for sparse patterns, raise COUNT to reduce
             # round-trips to the server

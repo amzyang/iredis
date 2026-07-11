@@ -1,11 +1,10 @@
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.data_structures import Point
 from prompt_toolkit.document import Document
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
-
 from prompt_toolkit.utils import get_cwidth
 
 from iredis.browser import (
@@ -111,11 +110,47 @@ def test_fit_tiny_width_degrades_to_ellipsis():
     assert _fit("abc", 0) == "…"
 
 
-def make_browser(keys, cursor=0, pattern="user:*", history=None):
+class InlineExecutor:
+    """Runs jobs synchronously: the async loading becomes deterministic."""
+
+    def submit(self, fn):
+        fn()
+
+    def shutdown(self, wait=True, cancel_futures=False):
+        pass
+
+
+class DeferredExecutor:
+    """Holds jobs until run(): simulates the worker lagging the UI."""
+
+    def __init__(self):
+        self.jobs = []
+
+    def submit(self, fn):
+        self.jobs.append(fn)
+
+    def run(self):
+        jobs, self.jobs = self.jobs, []
+        for fn in jobs:
+            fn()
+
+    def shutdown(self, wait=True, cancel_futures=False):
+        pass
+
+
+def make_client(keys, cursor=0):
     client = MagicMock()
+    types = dict(keys)
     client.scan_keys.return_value = ([key for key, _ in keys], cursor)
-    client._fetch_types.return_value = [key_type for _, key_type in keys]
-    return KeyBrowser(client, pattern, history=history)
+    client._fetch_types.side_effect = lambda ks: [types.get(k, "string") for k in ks]
+    return client
+
+
+def make_browser(keys, cursor=0, pattern="user:*", history=None, executor=None):
+    client = make_client(keys, cursor)
+    return KeyBrowser(
+        client, pattern, history=history, executor=executor or InlineExecutor()
+    )
 
 
 def test_browser_auto_expands_single_chain_and_selects_first_key():
@@ -152,9 +187,7 @@ def test_browser_delete_selected_key():
     browser.index = 1
     browser.delete_selected()
     browser.client.execute.assert_called_once_with("DEL", "user:1")
-    assert [row for row in browser.rows() if row[0] == "key"] == [
-        ("key", "user:2", "string", 0)
-    ]
+    assert [row[1] for row in browser.rows() if row[0] == "key"] == ["user:2"]
 
 
 def test_browser_delete_is_noop_on_group_row():
@@ -229,7 +262,7 @@ def test_browser_initial_pattern_gets_trailing_star():
         [("task:1", "string"), ("task:2", "string")], pattern="task:"
     )
     assert browser.pattern == "task:*"
-    browser.client.scan_keys.assert_called_with("task:*", 0)
+    browser.client.scan_keys.assert_called_with("task:*", 0, stop_check=ANY)
     assert browser.pattern_buffer.text == "task:*"
     assert list(browser.history.load_history_strings()) == ["task:*"]
 
@@ -237,7 +270,6 @@ def test_browser_initial_pattern_gets_trailing_star():
 def test_browser_submit_pattern_appends_trailing_star():
     browser = make_browser([("user:1", "string")])
     browser.client.scan_keys.return_value = ([], 0)
-    browser.client._fetch_types.return_value = []
     browser.pattern_buffer.text = "task:"
 
     browser.submit_pattern()
@@ -269,13 +301,12 @@ def test_browser_apply_pattern_resets_state():
     browser.index = 2
     browser.detail_pane.vertical_scroll = 3
     browser.client.scan_keys.return_value = (["queue:a", "queue:b"], 0)
-    browser.client._fetch_types.return_value = ["list", "list"]
 
     browser.apply_pattern("queue:*")
 
     assert browser.pattern == "queue:*"
-    browser.client.scan_keys.assert_called_with("queue:*", 0)
-    assert [key for key, _ in browser.keys] == ["queue:a", "queue:b"]
+    browser.client.scan_keys.assert_called_with("queue:*", 0, stop_check=ANY)
+    assert browser.keys == ["queue:a", "queue:b"]
     assert browser.expanded == {"queue"}
     assert browser.rows()[browser.index][0] == "key"
     assert browser.detail_pane.vertical_scroll == 0
@@ -286,7 +317,6 @@ def test_browser_apply_pattern_resets_state():
 def test_browser_submit_pattern_applies_and_saves_history():
     browser = make_browser([("user:1", "string"), ("user:2", "string")])
     browser.client.scan_keys.return_value = (["queue:a"], 0)
-    browser.client._fetch_types.return_value = ["list"]
     browser.pattern_buffer.text = "queue:*"
 
     browser.submit_pattern()
@@ -298,7 +328,6 @@ def test_browser_submit_pattern_applies_and_saves_history():
 def test_browser_submit_empty_pattern_falls_back_to_star():
     browser = make_browser([("user:1", "string")])
     browser.client.scan_keys.return_value = ([], 0)
-    browser.client._fetch_types.return_value = []
     browser.pattern_buffer.text = "   "
 
     browser.submit_pattern()
@@ -637,3 +666,118 @@ def test_copy_stream_value_falls_back_to_detail_without_header(monkeypatch):
     browser.copy_selected_value()
 
     assert copied["text"] == "XINFO: ..."  # no key-name header line
+
+
+# === async loading: the worker fills the panel in, the UI never blocks ===
+
+
+def test_browser_shows_scanning_state_before_first_batch_lands():
+    executor = DeferredExecutor()
+    browser = KeyBrowser(
+        make_client([("user:1", "string")]), "user:*", executor=executor
+    )
+
+    assert browser.keys == []
+    assert "scanning…" in browser.stats_text()[0][1]
+    assert browser.key_rows() == [("class:type", " scanning…")]
+
+    executor.run()
+
+    assert browser.keys == ["user:1"]
+    assert "scan finished" in browser.stats_text()[0][1]
+
+
+def test_key_rows_fetches_types_only_for_visible_keys():
+    # 200 flat keys: only the rows on screen deserve a TYPE round-trip
+    browser = make_browser([(f"key{i:03}", "string") for i in range(200)])
+
+    browser.key_rows()
+
+    requested = browser.client._fetch_types.call_args[0][0]
+    assert 0 < len(requested) < 200
+
+
+def test_unknown_type_renders_placeholder_until_fetched():
+    executor = DeferredExecutor()
+    browser = KeyBrowser(
+        make_client([("user:1", "string"), ("user:2", "string")]),
+        "user:*",
+        executor=executor,
+    )
+    executor.run()  # the scan lands, types are still unknown
+
+    style, text, _ = row_fragments(browser)[2][0]  # the unselected user:2 row
+    assert style == "class:type"
+    assert text.strip() == "…"
+
+    executor.run()  # the viewport TYPE fetch lands
+
+    style, text, _ = row_fragments(browser)[2][0]
+    assert style == "class:type-string"
+    assert text.strip() == "str"
+
+
+def test_type_fetch_not_resubmitted_while_pending():
+    executor = DeferredExecutor()
+    browser = KeyBrowser(
+        make_client([("a", "string"), ("b", "string")]), "*", executor=executor
+    )
+    executor.run()  # the scan lands
+
+    browser.key_rows()  # queues one TYPE job
+    browser.key_rows()  # still pending: no second job
+    assert len(executor.jobs) == 1
+
+    executor.run()
+    browser.client._fetch_types.assert_called_once()
+
+    browser.key_rows()  # every type known: nothing new queued
+    assert executor.jobs == []
+
+
+def test_stale_scan_results_discarded_after_pattern_change():
+    executor = DeferredExecutor()
+    client = make_client([("old:1", "string")])
+    browser = KeyBrowser(client, "old:*", executor=executor)
+
+    client.scan_keys.return_value = (["new:1"], 0)
+    browser.apply_pattern("new:*")  # the first scan job is still queued
+    executor.run()
+
+    assert browser.keys == ["new:1"]
+    # the stale job returned without scanning: one call per live pattern
+    client.scan_keys.assert_called_once_with("new:*", 0, stop_check=ANY)
+
+
+def test_space_does_not_stack_scan_jobs_while_scanning():
+    executor = DeferredExecutor()
+    browser = KeyBrowser(
+        make_client([("user:1", "string")], cursor=7), "user:*", executor=executor
+    )
+
+    browser.load_more()  # still scanning the first batch: dropped
+    assert len(executor.jobs) == 1
+
+    executor.run()
+    assert browser.scanning is False
+    browser.load_more()  # cursor 7: a real continuation
+    assert len(executor.jobs) == 1
+
+
+def test_peek_skipped_when_selection_moved_away():
+    executor = DeferredExecutor()
+    client = make_client([("a", "string"), ("b", "string")])
+    client.do_peek.return_value = ["detail"]
+    browser = KeyBrowser(client, "*", executor=executor)
+    executor.run()  # the scan lands
+
+    assert browser.detail_rows()[-1] == ("class:type", "loading…")
+    browser.index = 1  # move to "b" before the peek job runs
+    executor.run()
+    client.do_peek.assert_not_called()  # latest wins: "a" was scrolled past
+
+    browser.index = 0  # landing on "a" again resubmits
+    assert browser.detail_rows()[-1] == ("class:type", "loading…")
+    executor.run()
+    client.do_peek.assert_called_once_with("a")
+    assert browser.detail_rows()[-1] == ("", "detail")

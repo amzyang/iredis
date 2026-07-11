@@ -10,6 +10,13 @@ detail (reusing PEEK). Without a pattern argument the whole keyspace
 (``*``) is browsed. When the browser exits, the alternate screen is
 dropped and the REPL, along with its scrollback, is restored untouched.
 
+All redis I/O runs on a single worker thread so the panel shows up
+instantly and never blocks: SCAN batches stream in, key types are fetched
+lazily for the visible rows only (a slow proxy pays per command), and the
+detail pane peeks the selected key in the background. The worker is the
+sole connection user while the browser is open -- the REPL is parked in
+``run()`` -- and is drained before the connection is handed back.
+
 Key bindings:
     /                        edit the pattern: a menu offers recently used
                              patterns, Enter rescans, Esc cancels
@@ -31,6 +38,7 @@ pattern.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.buffer import Buffer
@@ -246,7 +254,7 @@ class RecentPatternCompleter(Completer):
 
 
 class KeyBrowser:
-    def __init__(self, client, pattern, history=None):
+    def __init__(self, client, pattern, history=None, executor=None):
         self.client = client
         self.history = history or InMemoryHistory()
         pattern = normalize_pattern(pattern)
@@ -256,43 +264,132 @@ class KeyBrowser:
         if pattern not in ("*", last):
             self.history.append_string(pattern)
         self.pattern = pattern
-        # (key, type) pairs, both str, in scan order
+        # str keys in scan order; types live apart so they can arrive later
         self.keys = []
+        # key -> type, filled lazily for the visible rows only
+        self.types = {}
         # str keys ever scanned, to feed the REPL's key completer on exit
         self.seen_keys = []
         self.cursor = 0
         self.scan_finished = False
+        self.scanning = False
         self.index = 0
         self.confirm_delete = False
         # one-shot footer message (e.g. "value copied"), cleared on any key
         self.notice = None
         self.expanded = set()
         self._detail_cache = {}
+        self._type_pending = set()
+        self._detail_pending = set()
+        self._generation = 0
+        self._closed = False
+        self._app = None
+        # the worker owns all redis I/O while the browser is open (the
+        # REPL is parked in run(), so the shared connection is free);
+        # injectable so tests run jobs inline
+        self._executor = executor or ThreadPoolExecutor(max_workers=1)
         self._build_layout()
         self.apply_pattern(pattern)
 
-    def load_more(self):
-        if self.scan_finished:
+    # === background worker: the only place redis commands run ===
+
+    def _submit(self, fn, *args):
+        """Queue a job on the worker; exceptions become a footer notice
+        instead of dying silently in the thread."""
+
+        def job():
+            try:
+                fn(*args)
+            except Exception as e:
+                logger.exception(e)
+                self.notice = str(e)
+                self._invalidate()
+
+        self._executor.submit(job)
+
+    def _stale(self, generation):
+        """A job's results are dead once the pattern changed or the
+        browser closed."""
+        return self._closed or generation != self._generation
+
+    def _invalidate(self):
+        if self._app is not None:
+            self._app.invalidate()
+
+    def _scan_job(self, generation):
+        if self._stale(generation):
             return
-        keys, self.cursor = self.client.scan_keys(self.pattern, self.cursor)
-        self.scan_finished = self.cursor == 0
-        types = self.client._fetch_types(keys)
+
+        def stop():
+            return self._stale(generation)
+
+        keys, cursor = self.client.scan_keys(self.pattern, self.cursor, stop_check=stop)
+        if stop():
+            return
         str_keys = ensure_str(keys)
-        self.keys.extend(zip(str_keys, types))
+        first_batch = not self.keys
+        # rebind, don't mutate: the UI thread reads consistent snapshots
+        self.keys = self.keys + str_keys
         self.seen_keys.extend(str_keys)
+        self.cursor = cursor
+        self.scan_finished = cursor == 0
+        if first_batch:
+            self.expanded = set(single_chain_paths([(k, None) for k in str_keys]))
+            self.index = self._first_key_row()
+        self.scanning = False
+        self._invalidate()
+
+    def _types_job(self, generation, keys):
+        try:
+            if self._stale(generation):
+                return
+            types = self.client._fetch_types(keys)
+            if self._stale(generation):
+                return
+            self.types = {**self.types, **dict(zip(keys, types))}
+        finally:
+            self._type_pending.difference_update(keys)
+        self._invalidate()
+
+    def _request_types(self, keys):
+        """Queue a pipelined TYPE fetch for the viewport keys not yet
+        known nor in flight; the pending set stops repaint loops."""
+        missing = [
+            key
+            for key in keys
+            if key not in self.types and key not in self._type_pending
+        ]
+        if not missing:
+            return
+        self._type_pending.update(missing)
+        self._submit(self._types_job, self._generation, missing)
+
+    def load_more(self):
+        if self.scanning or self.scan_finished:
+            return
+        self.scanning = True
+        self._submit(self._scan_job, self._generation)
 
     def apply_pattern(self, pattern):
-        """Rescan the keyspace with pattern, resetting every view state."""
+        """Rescan the keyspace with pattern, resetting every view state.
+
+        The scan lands in batches from the worker; a stale generation
+        makes any in-flight job drop its results."""
+        self._generation += 1
         self.pattern = pattern
         self.keys = []
+        self.types = {}
         self.cursor = 0
         self.scan_finished = False
+        self.scanning = True
         self.confirm_delete = False
+        self.expanded = set()
+        self.index = 0
         self._detail_cache.clear()
+        self._type_pending.clear()
+        self._detail_pending.clear()
         self.detail_pane.vertical_scroll = 0
-        self.load_more()
-        self.expanded = set(single_chain_paths(self.keys))
-        self.index = self._first_key_row()
+        self._submit(self._scan_job, self._generation)
 
     def submit_pattern(self):
         """Apply the pattern box's text: record it and rescan."""
@@ -307,7 +404,9 @@ class KeyBrowser:
         self.pattern_buffer.document = Document(self.pattern, len(self.pattern))
 
     def rows(self):
-        return tree_rows(self.keys, self.expanded)
+        return tree_rows(
+            [(key, self.types.get(key)) for key in self.keys], self.expanded
+        )
 
     def _first_key_row(self):
         for i, row in enumerate(self.rows()):
@@ -334,10 +433,17 @@ class KeyBrowser:
         key = self.selected_key
         if key is None:
             return
+        self._submit(self._delete_job, self._generation, key)
+
+    def _delete_job(self, generation, key):
+        if self._stale(generation):
+            return
         self.client.execute("DEL", key)
-        self.keys = [item for item in self.keys if item[0] != key]
+        self.keys = [k for k in self.keys if k != key]
+        self.types.pop(key, None)
         self._detail_cache.pop(key, None)
         self.move(0)
+        self._invalidate()
 
     def move(self, delta):
         rows = self.rows()
@@ -416,17 +522,38 @@ class KeyBrowser:
         self.notice = f"key copied: {key}"
 
     def copy_selected_value(self):
-        row = self.selected_row
-        if row is None or row[0] != "key":
+        key = self.selected_key
+        if key is None:
             self.notice = "select a key first"
             return
-        _, key, key_type, _ = row
+        self.notice = "copying…"
+        self._submit(self._copy_value_job, self._generation, key)
+
+    def _copy_value_job(self, generation, key):
+        if self._stale(generation):
+            return
+        key_type = self.types.get(key) or self.client._fetch_types([key])[0]
         text = value_text(self.client, key, key_type)
         if text is None:
             # no plain representation (e.g. stream): copy the detail text
-            text = "".join(fragment for _, fragment in self._key_detail(key))
-        copy_to_clipboard(text, get_app().output)
-        self.notice = f"value copied ({len(text)} chars)"
+            detail = self._detail_cache.get(key) or self._fetch_detail(key)
+            text = "".join(fragment for _, fragment in detail)
+        self._finish_copy(text, f"value copied ({len(text)} chars)")
+
+    def _finish_copy(self, text, notice):
+        """Clipboard and notice land on the UI thread: copy_to_clipboard
+        may write OSC 52 to the terminal, racing the renderer otherwise."""
+
+        def finish():
+            app = self._app
+            copy_to_clipboard(text, app.output if app else None)
+            self.notice = notice
+            self._invalidate()
+
+        if self._app is None:
+            finish()
+        else:
+            self._app.loop.call_soon_threadsafe(finish)
 
     def _page_size(self):
         return max(1, get_app().output.get_size().rows - CHROME_HEIGHT - 1)
@@ -439,11 +566,12 @@ class KeyBrowser:
     # === render callables, called by prompt_toolkit on every repaint ===
 
     def stats_text(self):
-        state = (
-            "scan finished"
-            if self.scan_finished
-            else f"cursor {self.cursor}, Space to scan more"
-        )
+        if self.scanning:
+            state = "scanning…"
+        elif self.scan_finished:
+            state = "scan finished"
+        else:
+            state = f"cursor {self.cursor}, Space to scan more"
         return [
             ("class:bottom-toolbar", f" {len(self.keys)} keys  [{state}] "),
         ]
@@ -488,11 +616,15 @@ class KeyBrowser:
     def key_rows(self):
         rows = self.rows()
         if not rows:
-            return [("class:type", " (no key matched)")]
+            state = " scanning…" if self.scanning else " (no key matched)"
+            return [("class:type", state)]
         out = []
         page = self._page_size()
         start = max(0, min(self.index - page // 2, len(rows) - page))
-        for i, row in list(enumerate(rows))[start : start + page]:
+        window = list(enumerate(rows))[start : start + page]
+        # lazy types: only the rows on screen are worth a TYPE round-trip
+        self._request_types([row[1] for _, row in window if row[0] == "key"])
+        for i, row in window:
             selected = i == self.index
             indent = "  " * row[3]
             click = self.tree_row_mouse_handler(i)
@@ -512,38 +644,51 @@ class KeyBrowser:
                     out.append(("class:group", f" {indent}{arrow} {name}", click))
                     out.append(("class:type", count_text, click))
             else:
-                _, key, key_type, _ = row
-                abbrev = TYPE_ABBREV.get(key_type, key_type[:4])
+                key = row[1]
+                # read the dict, not the row: the fetch may just have landed
+                key_type = self.types.get(key)
+                abbrev = TYPE_ABBREV.get(key_type, key_type[:4]) if key_type else "…"
+                style = f"class:type-{key_type}" if key_type else "class:type"
                 name = _fit(key, TREE_WIDTH - 1 - len(indent) - TYPE_WIDTH)
                 if selected:
                     text = f" {indent}{abbrev:{TYPE_WIDTH}}{name}"
                     out.append(("class:selected", _pad(text), click))
                 else:
-                    out.append(
-                        (
-                            f"class:type-{key_type}",
-                            f" {indent}{abbrev:{TYPE_WIDTH}}",
-                            click,
-                        )
-                    )
+                    out.append((style, f" {indent}{abbrev:{TYPE_WIDTH}}", click))
                     out.append(("class:key", name, click))
             out.append(("", "\n"))
         return out
 
-    def _key_detail(self, key):
-        if key not in self._detail_cache:
+    def _fetch_detail(self, key):
+        detail = []
+        for answer in self.client.do_peek(key):
+            if isinstance(answer, str):
+                detail.append(("", answer))
+            else:
+                detail.extend(answer)
+        return detail
+
+    def _peek_job(self, generation, key):
+        try:
+            # latest wins: a key scrolled past isn't worth an expensive
+            # PEEK; landing on it again resubmits
+            if self._stale(generation) or self.selected_key != key:
+                return
             try:
-                detail = []
-                for answer in self.client.do_peek(key):
-                    if isinstance(answer, str):
-                        detail.append(("", answer))
-                    else:
-                        detail.extend(answer)
-                self._detail_cache[key] = detail
+                detail = self._fetch_detail(key)
             except Exception as e:
                 logger.exception(e)
-                self._detail_cache[key] = [("class:error", f"(error) {str(e)}")]
-        return self._detail_cache[key]
+                detail = [("class:error", f"(error) {str(e)}")]
+            self._detail_cache[key] = detail
+        finally:
+            self._detail_pending.discard(key)
+        self._invalidate()
+
+    def _key_detail(self, key):
+        if key not in self._detail_cache and key not in self._detail_pending:
+            self._detail_pending.add(key)
+            self._submit(self._peek_job, self._generation, key)
+        return self._detail_cache.get(key, [("class:type", "loading…")])
 
     def detail_rows(self):
         row = self.selected_row
@@ -780,4 +925,12 @@ class KeyBrowser:
             style=get_style(config.theme),
         )
         application.ttimeoutlen = ESCAPE_FLUSH_TIMEOUT
-        return application.run()
+        self._app = application
+        try:
+            return application.run()
+        finally:
+            # hand the connection back quiet: the REPL peeks the picked
+            # key on it right after
+            self._closed = True
+            self._executor.shutdown(wait=True, cancel_futures=True)
+            self._app = None

@@ -779,3 +779,17 @@ def test_scan_keys_in_batches_until_finished(iredis_client, clean_redis):
     assert set(scanned) == {f"user:{i}" for i in range(5000)}
     # 5000 keys can't fit in one batch
     assert batches > 1
+
+
+def test_scan_keys_stop_check_aborts_between_rounds(iredis_client, clean_redis):
+    pipeline = clean_redis.pipeline()
+    for i in range(5000):
+        pipeline.set(f"user:{i}", i)
+    pipeline.execute()
+
+    # a sparse pattern needs many rounds; a tripped stop_check quits after
+    # the first one instead of iterating to the end
+    keys, cursor = iredis_client.scan_keys("nomatch:*", 0, stop_check=lambda: True)
+
+    assert keys == []
+    assert cursor != 0
