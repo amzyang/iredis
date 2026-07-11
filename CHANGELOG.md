@@ -1,4 +1,12 @@
-## UPCOMING
+## 2.1.1
+
+- Bugfix: `iredis --version` reported 1.16.1 in the 2.x releases because the
+  version string was never bumped. `__version__` is now read from package
+  metadata via `importlib.metadata`, so `pyproject.toml` is the single source
+  of truth; the Homebrew bump workflow now fails if the tag doesn't match
+  the packaged version.
+
+## 2.1.0
 
 - Feature: redis-server version detection now runs in a background thread with a
   dedicated connection (`INFO` first, fallback to `HELLO`), so iredis starts
@@ -6,6 +14,9 @@
   features (peek's memory usage, slowlog fields, AUTH completion syntax) recover
   automatically once the probe finishes. `no_info = True` now only hides the
   server version line from the greeting.
+
+## 2.0.0
+
 - Feature: support color themes, via `--theme` option or `theme` in iredisrc. The
   new `default` theme only uses the terminal's ANSI colors, so iredis's style stays
   consistent with the terminal color scheme; the original hardcoded color scheme is
