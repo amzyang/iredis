@@ -17,6 +17,11 @@ newbie_mode = False
 # show prompt in a ranibow color
 rainbow = False
 
+# use vi keybindings to edit the input, like set -o vi in bash.
+# The cursor shape follows the current vi mode: a beam cursor for
+# insert mode, a block cursor for normal mode.
+vi_mode = False
+
 # color theme of iredis, supported themes:
 #   default: only use the terminal's ANSI colors, so iredis's style stays
 #            consistent with your terminal color scheme (works well on both

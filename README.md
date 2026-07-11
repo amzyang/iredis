@@ -38,6 +38,9 @@ like `KEYS *` (see
 - _pipeline_ feature, you can use your favorite shell tools to parse redis'
   response, like `get json | jq .`.
 - Support pager for long output.
+- Support vi keybindings for editing the input, like `set -o vi` in bash:
+  enable with `--vi` or `vi_mode = True` in `iredisrc`. The cursor shape
+  follows the current vi mode: beam for insert mode, block for normal mode.
 - Support connection via URL, `iredis --url redis://example.com:6379/1`.
 - Support cluster, IRedis will auto reissue command for `MOVED` response in
   cluster mode.
@@ -207,6 +210,9 @@ Options:
                                   STDOUT is not a tty.
 
   --rainbow / --no-rainbow        Display colorful prompt.
+  --vi / --no-vi                  Use vi keybindings to edit the input, like
+                                  `set -o vi` in bash.
+
   --theme [catppuccin-frappe|catppuccin-latte|catppuccin-macchiato|catppuccin-mocha|classic|default]
                                   Color theme. "default" only uses your
                                   terminal's ANSI colors, so iredis looks

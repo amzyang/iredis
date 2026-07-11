@@ -31,7 +31,8 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
-prompt_toolkit = "^3"
+# >=3.0.29 for prompt_toolkit.cursor_shapes (vi mode modal cursor)
+prompt_toolkit = "^3.0.29"
 Pygments = "^2"
 mistune = "^3.0"
 configobj = "^5.0"

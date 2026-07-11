@@ -31,6 +31,9 @@ class Config:
         # show command hint?
         self.newbie_mode = None
         self.rainbow = None
+        # use vi keybindings for input editing, cursor shape follows
+        # the vi mode (beam for insert, block for normal)
+        self.vi_mode = None
         self.retry_times = 2
         self.socket_keepalive = None
         self.decode = None
@@ -125,6 +128,7 @@ def load_config_files(iredisrc):
     config.retry_times = config_obj["main"].as_int("retry_times")
     config.newbie_mode = config_obj["main"].as_bool("newbie_mode")
     config.rainbow = config_obj["main"].as_bool("rainbow")
+    config.vi_mode = config_obj["main"].as_bool("vi_mode")
     config.socket_keepalive = config_obj["main"].as_bool("socket_keepalive")
     config.no_info = config_obj["main"].as_bool("no_info")
     config.bottom_bar = config_obj["main"].as_bool("bottom_bar")
