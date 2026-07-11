@@ -96,22 +96,23 @@ def config():
 @pytest.fixture(scope="function")
 def cli():
     """Open iredis subprocess to test"""
-    f = tempfile.TemporaryFile("w")
+    iredisrc = tempfile.mktemp(suffix=".iredisrc")
     config_content = dedent(
         """
         [main]
         log_location =
         warning = True
+        history_location = /tmp/.iredis_test_history
         """
     )
-    f.write(config_content)
-    f.close()
+    with open(iredisrc, "w") as config_file:
+        config_file.write(config_content)
     env = os.environ.copy()
     env["PROMPT_TOOLKIT_NO_CPR"] = "1"
     env["TERM"] = "xterm-256color"
 
     child = pexpect.spawn(
-        f"iredis -n 15 --iredisrc {f.name}",
+        f"iredis -n 15 --iredisrc {iredisrc}",
         timeout=TIMEOUT,
         env=env,
         dimensions=(40, 120),
@@ -120,6 +121,7 @@ def cli():
     child.expect(["https://github.com/amzyang/iredis/issues", "127.0.0.1"])
     yield child
     child.close()
+    os.remove(iredisrc)
 
 
 @pytest.fixture(scope="function")
@@ -145,23 +147,3 @@ def raw_cli():
     child.expect(["https://github.com/amzyang/iredis/issues", "127.0.0.1"])
     yield child
     child.close()
-
-
-@pytest.fixture(scope="function")
-def cli_without_warning():
-    f = tempfile.TemporaryFile("w")
-    config_content = dedent(
-        """
-        [main]
-        log_location = /tmp/iredis1.log
-        warning = False
-        """
-    )
-    f.write(config_content)
-    f.close()
-
-    cli = pexpect.spawn(f"iredis -n 15 --iredisrc {f.name}", timeout=1)
-    cli.logfile_read = open("cli_test.log", "ab")
-    yield cli
-    cli.close()
-    os.remove("/tmp/iredisrc")
