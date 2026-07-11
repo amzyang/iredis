@@ -50,6 +50,17 @@ def test_send_command(_input, command_name, expect_args):
     assert args == (command_name, *expect_args)
 
 
+def test_send_command_renders_utf8_error_message(config):
+    client = Client("127.0.0.1", 6379, None)
+    client.execute = MagicMock(
+        side_effect=redis.exceptions.ResponseError("没有查询权限")
+    )
+    resp = next(client.send_command("get foo"))
+    assert resp == FormattedText(
+        [("class:type", "(error) "), ("class:error", "ERROR 没有查询权限")]
+    )
+
+
 def test_client_not_support_hello_command(iredis_client):
     with pytest.raises(NotSupport):
         iredis_client.pre_hook("hello 3", "hello", "3", None)

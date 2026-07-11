@@ -600,10 +600,9 @@ class Client:
         except Exception as e:
             logger.exception(e)
             if config.raw:
-                render_callback = OutputRender.render_raw
+                yield OutputRender.render_raw(f"ERROR {str(e)}".encode())
             else:
-                render_callback = OutputRender.render_error
-            yield render_callback(f"ERROR {str(e)}".encode())
+                yield OutputRender.render_error(f"ERROR {str(e)}")
         finally:
             config.withscores = False
 
