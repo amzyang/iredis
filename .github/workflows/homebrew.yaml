@@ -4,18 +4,53 @@ on:
   push:
     tags:
       - v*
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to bump (e.g. v2.0.0)"
+        required: true
 
 jobs:
   bump-formula:
     name: bump-homebrew-formula
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
+      - name: Compute release tarball sha256
+        id: release
+        run: |
+          version="${TAG#v}"
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${TAG}.tar.gz"
+          curl -fsSL "$url" -o release.tar.gz
+          {
+            echo "version=${version}"
+            echo "url=${url}"
+            echo "sha256=$(sha256sum release.tar.gz | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Bump iredis formula in amzyang/homebrew-tap
-        uses: mislav/bump-homebrew-formula-action@v3
-        with:
-          formula-name: iredis
-          formula-path: Formula/iredis.rb
-          homebrew-tap: amzyang/homebrew-tap
-          download-url: https://github.com/amzyang/iredis/archive/refs/tags/${{ github.ref_name }}.tar.gz
         env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          URL: ${{ steps.release.outputs.url }}
+          VERSION: ${{ steps.release.outputs.version }}
+          SHA256: ${{ steps.release.outputs.sha256 }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/amzyang/homebrew-tap.git" tap
+          cd tap
+          # only touch the top-level (2-space indented) fields, not resource blocks
+          sed -i \
+            -e "s|^  url \".*\"|  url \"${URL}\"|" \
+            -e "s|^  version \".*\"|  version \"${VERSION}\"|" \
+            -e "s|^  sha256 \".*\"|  sha256 \"${SHA256}\"|" \
+            Formula/iredis.rb
+          grep -qF "url \"${URL}\"" Formula/iredis.rb
+          grep -qF "sha256 \"${SHA256}\"" Formula/iredis.rb
+          if git diff --quiet; then
+            echo "Formula already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "iredis ${VERSION}"
+          git push

@@ -359,9 +359,10 @@ Also:
 
 ### Release Strategy
 
-IRedis is built and released by `GitHub Actions`. Whenever a tag is pushed to
-the `master` branch, a new release is built and uploaded to pypi.org, it's very
-convenient.
+IRedis is built and released by `GitHub Actions`. Whenever a version tag
+(`v*`) is pushed, the Homebrew formula in
+[amzyang/homebrew-tap](https://github.com/amzyang/homebrew-tap) is bumped
+automatically, it's very convenient.
 
 Thus, we release as often as possible, so that users can always enjoy the new
 features and bugfixes quickly. Any bugfix or new feature will get at least a
