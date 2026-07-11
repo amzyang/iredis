@@ -1,11 +1,11 @@
 <p align="center">
-  <img width="100" height="100" src="https://raw.githubusercontent.com/laixintao/iredis/master/docs/assets/logo.png" />
+  <img width="100" height="100" src="https://raw.githubusercontent.com/amzyang/iredis/main/docs/assets/logo.png" />
 </p>
 
 <h3 align="center">Interactive Redis: A Cli for Redis with AutoCompletion and Syntax Highlighting.</h3>
 
 <p align="center">
-<a href="https://github.com/laixintao/iredis/actions"><img src="https://github.com/laixintao/iredis/actions/workflows/test.yaml/badge.svg?branch=master" alt="Github Action"></a>
+<a href="https://github.com/amzyang/iredis/actions"><img src="https://github.com/amzyang/iredis/actions/workflows/test.yaml/badge.svg?branch=main" alt="Github Action"></a>
 <a href="https://badge.fury.io/py/iredis"><img src="https://badge.fury.io/py/iredis.svg" alt="PyPI version"></a>
 <img src="https://badgen.net/badge/python/3.10%20%7C%203.11%20%7C%203.12" alt="Python version">
 <a href="https://pepy.tech/project/iredis"><img src="https://pepy.tech/badge/iredis" alt="Download stats"></a>
@@ -299,7 +299,7 @@ You can change the prompt str, the default prompt is:
 
 Which is rendered by `{host}:{port}[{db}]> `, you can change this via `--prompt`
 option or change
-[iredisrc](https://github.com/laixintao/iredis/blob/master/iredis/data/iredisrc)
+[iredisrc](https://github.com/amzyang/iredis/blob/main/iredis/data/iredisrc)
 config file. The prompwt string uses python string format engine, supported
 interpolations:
 
@@ -332,7 +332,7 @@ over config. Configuration resolution from highest to lowest precedence is:
 
 You can copy the _self-explained_ default config here:
 
-https://raw.githubusercontent.com/laixintao/iredis/master/iredis/data/iredisrc
+https://raw.githubusercontent.com/amzyang/iredis/main/iredis/data/iredisrc
 
 And then make your own changes.
 
