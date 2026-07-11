@@ -1,6 +1,16 @@
 from unittest.mock import MagicMock
 
-from iredis.browser import KeyBrowser, single_chain_paths, tree_rows
+from prompt_toolkit.completion import CompleteEvent
+from prompt_toolkit.document import Document
+from prompt_toolkit.history import InMemoryHistory
+
+from iredis.browser import (
+    KeyBrowser,
+    RecentPatternCompleter,
+    single_chain_paths,
+    tree_rows,
+    value_text,
+)
 
 MEDIS_KEYS = [
     ("task:scheduler:device_load:xiaohongshu", "zset"),
@@ -74,11 +84,11 @@ def test_single_chain_paths_empty_for_mixed_root():
     assert single_chain_paths(keys) == []
 
 
-def make_browser(keys, cursor=0):
+def make_browser(keys, cursor=0, pattern="user:*", history=None):
     client = MagicMock()
     client.scan_keys.return_value = ([key for key, _ in keys], cursor)
     client._fetch_types.return_value = [key_type for _, key_type in keys]
-    return KeyBrowser(client, "user:*")
+    return KeyBrowser(client, pattern, history=history)
 
 
 def test_browser_auto_expands_single_chain_and_selects_first_key():
@@ -144,18 +154,25 @@ def test_browser_index_clamps_after_fold():
     assert browser.selected_row == ("group", "user", 2, 0, False)
 
 
+def tree_handlers(browser):
+    return {
+        binding.keys[0]: binding.handler
+        for binding in browser.tree_key_bindings().bindings
+    }
+
+
 def test_browser_binds_vim_hjkl_alongside_arrows():
     browser = make_browser([("user:1", "string"), ("user:2", "string")])
-    bound = {key for binding in browser.key_bindings().bindings for key in binding.keys}
+    bound = {
+        key for binding in browser.tree_key_bindings().bindings for key in binding.keys
+    }
     assert {"h", "j", "k", "l", "up", "down", "left", "right"} <= bound
 
 
 def test_browser_hjkl_navigation_behaviour():
     browser = make_browser([("user:1", "string"), ("user:2", "string")])
     event = MagicMock()
-    handlers = {
-        binding.keys[0]: binding.handler for binding in browser.key_bindings().bindings
-    }
+    handlers = tree_handlers(browser)
 
     browser.index = 1
     handlers["j"](event)
@@ -168,3 +185,229 @@ def test_browser_hjkl_navigation_behaviour():
     assert browser.rows() == [("group", "user", 2, 0, False)]
     handlers["l"](event)  # unfold it again
     assert len(browser.rows()) == 3
+
+
+# === pattern input, history, recents menu ===
+
+
+def test_browser_records_initial_pattern_in_history():
+    browser = make_browser([("user:1", "string")])
+    assert list(browser.history.load_history_strings()) == ["user:*"]
+
+
+def test_browser_star_pattern_not_recorded_in_history():
+    browser = make_browser([("user:1", "string")], pattern="*")
+    assert list(browser.history.load_history_strings()) == []
+
+
+def test_browser_rerun_with_same_pattern_not_duplicated():
+    history = InMemoryHistory()
+    history.append_string("user:*")
+    browser = make_browser([("user:1", "string")], history=history)
+    assert list(browser.history.load_history_strings()) == ["user:*"]
+
+
+def test_browser_apply_pattern_resets_state():
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    browser.index = 2
+    browser.detail_window.vertical_scroll = 3
+    browser.client.scan_keys.return_value = (["queue:a", "queue:b"], 0)
+    browser.client._fetch_types.return_value = ["list", "list"]
+
+    browser.apply_pattern("queue:*")
+
+    assert browser.pattern == "queue:*"
+    browser.client.scan_keys.assert_called_with("queue:*", 0)
+    assert [key for key, _ in browser.keys] == ["queue:a", "queue:b"]
+    assert browser.expanded == {"queue"}
+    assert browser.rows()[browser.index][0] == "key"
+    assert browser.detail_window.vertical_scroll == 0
+    # keys of every browsed pattern feed the REPL completer on exit
+    assert set(browser.seen_keys) == {"user:1", "user:2", "queue:a", "queue:b"}
+
+
+def test_browser_submit_pattern_applies_and_saves_history():
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    browser.client.scan_keys.return_value = (["queue:a"], 0)
+    browser.client._fetch_types.return_value = ["list"]
+    browser.pattern_buffer.text = "queue:*"
+
+    browser.submit_pattern()
+
+    assert browser.pattern == "queue:*"
+    assert list(browser.history.load_history_strings()) == ["queue:*", "user:*"]
+
+
+def test_browser_submit_empty_pattern_falls_back_to_star():
+    browser = make_browser([("user:1", "string")])
+    browser.client.scan_keys.return_value = ([], 0)
+    browser.client._fetch_types.return_value = []
+    browser.pattern_buffer.text = "   "
+
+    browser.submit_pattern()
+
+    assert browser.pattern == "*"
+    assert browser.pattern_buffer.text == "*"
+    # `*` is noise in the recents menu, never recorded
+    assert list(browser.history.load_history_strings()) == ["user:*"]
+
+
+def test_browser_resubmit_current_pattern_rescans_without_history_dup():
+    browser = make_browser([("user:1", "string")])
+    browser.pattern_buffer.text = "user:*"
+    browser.submit_pattern()
+    assert browser.pattern == "user:*"
+    assert list(browser.history.load_history_strings()) == ["user:*"]
+
+
+def test_browser_cancel_input_restores_current_pattern():
+    browser = make_browser([("user:1", "string")])
+    browser.pattern_buffer.text = "half-typed"
+    browser.cancel_input()
+    assert browser.pattern_buffer.text == "user:*"
+
+
+def test_recent_pattern_completer_most_recent_first_dedup():
+    history = InMemoryHistory()
+    for pattern in ["user:*", "queue:*", "user:*"]:
+        history.append_string(pattern)
+    completer = RecentPatternCompleter(history)
+    completions = list(completer.get_completions(Document(""), CompleteEvent()))
+    assert [c.text for c in completions] == ["user:*", "queue:*"]
+
+
+def test_recent_pattern_completer_filters_by_substring():
+    history = InMemoryHistory()
+    for pattern in ["user:*", "queue:*"]:
+        history.append_string(pattern)
+    completer = RecentPatternCompleter(history)
+    completions = list(completer.get_completions(Document("que"), CompleteEvent()))
+    assert [c.text for c in completions] == ["queue:*"]
+    assert completions[0].start_position == -3
+
+
+# === focus switching, detail scrolling ===
+
+
+def test_tab_moves_focus_from_tree_to_detail_and_back():
+    browser = make_browser([("user:1", "string")])
+    handlers = {
+        binding.keys[0]: binding.handler
+        for binding in browser.app_key_bindings().bindings
+    }
+    event = MagicMock()
+
+    event.app.layout.has_focus = lambda target: False  # tree focused
+    handlers["c-i"](event)  # prompt_toolkit normalizes "tab" to "c-i"
+    event.app.layout.focus.assert_called_once_with(browser.detail_window)
+
+    event.app.layout.focus.reset_mock()
+    event.app.layout.has_focus = lambda target: target is browser.detail_window
+    handlers["c-i"](event)
+    event.app.layout.focus.assert_called_once_with(browser.tree_window)
+
+
+def test_detail_bindings_scroll_and_move_resets():
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    handlers = {
+        binding.keys[0]: binding.handler
+        for binding in browser.detail_key_bindings().bindings
+    }
+    event = MagicMock()
+
+    handlers["j"](event)
+    handlers["j"](event)
+    assert browser.detail_window.vertical_scroll == 2
+    handlers["k"](event)
+    assert browser.detail_window.vertical_scroll == 1
+    handlers["k"](event)
+    handlers["k"](event)  # clamped at the top
+    assert browser.detail_window.vertical_scroll == 0
+
+    browser.detail_window.vertical_scroll = 5
+    browser.move(1)
+    assert browser.detail_window.vertical_scroll == 0
+
+
+# === copy shortcuts ===
+
+
+def test_value_text_string():
+    client = MagicMock()
+    client.execute.return_value = b"hello"
+    assert value_text(client, "k", "string") == "hello"
+    client.execute.assert_called_once_with("GET", "k")
+
+
+def test_value_text_list_and_set_one_element_per_line():
+    client = MagicMock()
+    client.execute.return_value = [b"a", b"b"]
+    assert value_text(client, "k", "list") == "a\nb"
+    client.execute.assert_called_with("LRANGE", "k", 0, -1)
+    assert value_text(client, "k", "set") == "a\nb"
+    client.execute.assert_called_with("SMEMBERS", "k")
+
+
+def test_value_text_hash_fields_tab_separated():
+    client = MagicMock()
+    client.execute.return_value = [b"f1", b"v1", b"f2", b"v2"]
+    assert value_text(client, "k", "hash") == "f1\tv1\nf2\tv2"
+    client.execute.assert_called_with("HGETALL", "k")
+
+
+def test_value_text_zset_member_score_pairs():
+    client = MagicMock()
+    client.execute.return_value = [b"m1", b"1", b"m2", b"2"]
+    assert value_text(client, "k", "zset") == "m1\t1\nm2\t2"
+    client.execute.assert_called_with("ZRANGE", "k", 0, -1, "WITHSCORES")
+
+
+def test_value_text_unknown_type_returns_none():
+    client = MagicMock()
+    assert value_text(client, "k", "stream") is None
+    client.execute.assert_not_called()
+
+
+def test_copy_selected_value_sends_raw_value_to_clipboard(monkeypatch):
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    copied = {}
+    monkeypatch.setattr(
+        "iredis.browser.copy_to_clipboard",
+        lambda text, output=None: copied.setdefault("text", text),
+    )
+    browser.client.execute.return_value = b"hello"
+    browser.index = 1  # user:1
+
+    browser.copy_selected_value()
+
+    assert copied["text"] == "hello"
+    assert "copied" in browser.notice
+
+
+def test_copy_selected_key_sends_key_name_to_clipboard(monkeypatch):
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    copied = {}
+    monkeypatch.setattr(
+        "iredis.browser.copy_to_clipboard",
+        lambda text, output=None: copied.setdefault("text", text),
+    )
+    browser.index = 2  # user:2
+
+    browser.copy_selected_key()
+
+    assert copied["text"] == "user:2"
+    assert "copied" in browser.notice
+
+
+def test_copy_on_group_row_flashes_notice_without_clipboard(monkeypatch):
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    monkeypatch.setattr(
+        "iredis.browser.copy_to_clipboard",
+        lambda text, output=None: (_ for _ in ()).throw(AssertionError),
+    )
+    browser.index = 0  # the "user" group row
+
+    browser.copy_selected_value()
+    assert "select a key" in browser.notice
+    browser.copy_selected_key()
+    assert "select a key" in browser.notice

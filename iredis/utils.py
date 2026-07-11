@@ -1,5 +1,8 @@
+import base64
 import logging
 import re
+import shutil
+import subprocess
 import sys
 import time
 from collections import namedtuple
@@ -10,6 +13,38 @@ from prompt_toolkit.formatted_text import FormattedText
 from iredis.exceptions import InvalidArguments
 
 logger = logging.getLogger(__name__)
+
+# system clipboard tools, tried in order; the first one on PATH wins
+CLIPBOARD_TOOLS = (
+    ("pbcopy",),
+    ("wl-copy",),
+    ("xclip", "-selection", "clipboard"),
+    ("xsel", "--clipboard", "--input"),
+)
+
+
+def copy_to_clipboard(text, output=None):
+    """
+    Copy text to the system clipboard, returns the mechanism used.
+
+    Prefers the platform's clipboard tool; without one, falls back to the
+    OSC 52 escape sequence (understood by most modern terminals, and works
+    over SSH), written to ``output`` (a prompt_toolkit Output) or stdout.
+    """
+    data = text.encode()
+    for tool in CLIPBOARD_TOOLS:
+        if shutil.which(tool[0]):
+            subprocess.run(tool, input=data)
+            return tool[0]
+    sequence = f"\x1b]52;c;{base64.b64encode(data).decode()}\x07"
+    if output is not None:
+        output.write_raw(sequence)
+        output.flush()
+    else:
+        sys.stdout.write(sequence)
+        sys.stdout.flush()
+    return "osc52"
+
 
 # a lone \x1b is also the prefix of arrow-key escape sequences, so
 # prompt_toolkit waits `Application.ttimeoutlen` (default 0.5s) before

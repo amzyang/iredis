@@ -57,14 +57,17 @@ like `KEYS *` (see
   terminal's alternate screen, your scrollback stays untouched). Without an
   argument it browses the whole keyspace; keys are grouped into a collapsible
   tree by `:` namespaces (like Medis' sidebar), scanned one batch at a time.
+  Press <kbd>/</kbd> to edit the pattern in place — a menu pops up with
+  recently used patterns (saved next to the command history).
   <kbd>↑</kbd>/<kbd>↓</kbd> to move the selection, <kbd>←</kbd>/<kbd>→</kbd>
   to fold/unfold a group (vim <kbd>h</kbd><kbd>j</kbd><kbd>k</kbd><kbd>l</kbd>
-  work too), the right pane shows the selected key's `PEEK`
-  detail, <kbd>Space</kbd> scans more keys, <kbd>Tab</kbd> toggles the detail
-  pane, <kbd>d</kbd><kbd>d</kbd> deletes, <kbd>Enter</kbd> exits and peeks
-  the picked key back in the REPL. Browsed keys also feed the completion of
-  the following commands' key argument. Press <kbd>F3</kbd> on an empty
-  prompt to open the browser directly.
+  work too), the right pane shows the selected key's `PEEK` detail —
+  <kbd>Tab</kbd> moves the focus there to scroll it. <kbd>Space</kbd> scans
+  more keys, <kbd>y</kbd>/<kbd>Y</kbd> copies the selected key's value/name
+  to the clipboard, <kbd>d</kbd><kbd>d</kbd> deletes, <kbd>Enter</kbd> exits
+  and peeks the picked key back in the REPL. Browsed keys also feed the
+  completion of the following commands' key argument. Press <kbd>F3</kbd> on
+  an empty prompt to open the browser directly.
 - <kbd>Ctrl</kbd> + <kbd>C</kbd> to cancel the current typed command, this won't
   exit IRedis, exactly like bash behaviour. Use <kbd>Ctrl</kbd> + <kbd>D</kbd>
   to send a EOF to exit IRedis.

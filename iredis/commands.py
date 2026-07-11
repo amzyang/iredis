@@ -112,9 +112,10 @@ commands_summary.update(
                 "Browse keys matching a pattern (default `*`) in an"
                 " interactive dual-pane view, grouped into a collapsible"
                 " tree by `:` namespaces. Up/Down to select, Left/Right to"
-                " fold/unfold, Space to scan more, Enter to peek the key"
-                " back in the REPL. Press F3 on an empty prompt as a"
-                " shortcut."
+                " fold/unfold, Space to scan more, `/` to edit the pattern"
+                " (recent patterns pop up), Tab to focus the detail pane,"
+                " y/Y to copy the value/key, Enter to peek the key back in"
+                " the REPL. Press F3 on an empty prompt as a shortcut."
             ),
             "arguments": [{"name": "pattern", "type": "pattern", "optional": True}],
             "complexity": "O(1) for every scan.",

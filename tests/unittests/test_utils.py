@@ -11,6 +11,7 @@ from iredis.style import STYLE
 from iredis.utils import (
     command_syntax,
     compose_command_syntax,
+    copy_to_clipboard,
     parse_argument_to_formatted_text,
     strip_quote_args,
     timer,
@@ -255,3 +256,32 @@ class TestComposeCommandSyntax:
         assert "[MATCH pattern]" in text
         assert "[COUNT count]" in text
         assert "[TYPE type]" in text
+
+
+class TestCopyToClipboard:
+    def test_prefers_system_clipboard_tool(self, monkeypatch):
+        calls = {}
+        monkeypatch.setattr(
+            "iredis.utils.shutil.which",
+            lambda name: "/usr/bin/pbcopy" if name == "pbcopy" else None,
+        )
+        monkeypatch.setattr(
+            "iredis.utils.subprocess.run",
+            lambda argv, input: calls.update(argv=argv, input=input),
+        )
+
+        assert copy_to_clipboard("hello") == "pbcopy"
+        assert calls["argv"] == ("pbcopy",)
+        assert calls["input"] == b"hello"
+
+    def test_falls_back_to_osc52_escape_sequence(self, monkeypatch):
+        import base64
+        from unittest.mock import MagicMock
+
+        monkeypatch.setattr("iredis.utils.shutil.which", lambda name: None)
+        output = MagicMock()
+
+        assert copy_to_clipboard("hi", output=output) == "osc52"
+        payload = base64.b64encode(b"hi").decode()
+        output.write_raw.assert_called_once_with(f"\x1b]52;c;{payload}\x07")
+        output.flush.assert_called_once_with()

@@ -730,6 +730,33 @@ def test_browse_with_pattern_needs_tty(iredis_client, config):
     assert "needs an interactive terminal" in out
 
 
+def test_browse_derives_pattern_history_from_history_location(
+    iredis_client, config, tmp_path, monkeypatch
+):
+    from prompt_toolkit.history import FileHistory
+
+    config.history_location = str(tmp_path / "history")
+    created = {}
+
+    class FakeBrowser:
+        def __init__(self, client, pattern, history=None):
+            created["pattern"] = pattern
+            created["history"] = history
+            self.seen_keys = []
+
+        def run(self):
+            return None
+
+    monkeypatch.setattr("iredis.browser.KeyBrowser", FakeBrowser)
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+
+    list(iredis_client.do_browse("user:*"))
+
+    assert created["pattern"] == "user:*"
+    assert isinstance(created["history"], FileHistory)
+    assert str(created["history"].filename) == str(tmp_path / "history_pattern")
+
+
 def test_scan_keys_in_batches_until_finished(iredis_client, clean_redis):
     pipeline = clean_redis.pipeline()
     for i in range(5000):

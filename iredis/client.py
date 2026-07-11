@@ -955,7 +955,15 @@ class Client:
         # local import: keep REPL startup free of layout modules
         from .browser import KeyBrowser
 
-        browser = KeyBrowser(self, pattern)
+        # recently browsed patterns live next to the command history
+        history = None
+        if config.history_location:
+            from prompt_toolkit.history import FileHistory
+
+            history = FileHistory(
+                os.path.expanduser(f"{config.history_location}_pattern")
+            )
+        browser = KeyBrowser(self, pattern, history=history)
         picked = browser.run()
         # browsed keys feed the key completer of following commands
         if self._completer and browser.seen_keys:
