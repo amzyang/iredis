@@ -7,6 +7,7 @@ import platform
 
 import click
 from prompt_toolkit import PromptSession
+from prompt_toolkit.cursor_shapes import ModalCursorShapeConfig
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit import print_formatted_text
@@ -224,6 +225,7 @@ DECODE_HELP = """
 decode response, default is No decode, which will output all bytes literals.
 """
 RAINBOW = "Display colorful prompt."
+VI_HELP = """Use vi keybindings to edit the input, like `set -o vi` in bash."""
 DSN_HELP = """
 Use DSN configured into the [alias_dsn] section of iredisrc file. \
 (Can set with env `IREDIS_DSN`)
@@ -282,6 +284,7 @@ VERIFY_SSL_HELP = """Set the TLS certificate verification strategy"""
 @click.option("--client_name", help="Assign a name to the current connection.")
 @click.option("--raw/--no-raw", default=None, is_flag=True, help=RAW_HELP)
 @click.option("--rainbow/--no-rainbow", default=None, is_flag=True, help=RAINBOW)
+@click.option("--vi/--no-vi", default=None, is_flag=True, help=VI_HELP)
 @click.option(
     "--theme", default=None, type=click.Choice(sorted(THEMES)), help=THEME_HELP
 )
@@ -331,6 +334,7 @@ def gather_args(
     decode,
     raw,
     rainbow,
+    vi,
     theme,
     cmd,
     dsn,
@@ -379,6 +383,8 @@ def gather_args(
         config.decode = decode
     if rainbow is not None:
         config.rainbow = rainbow
+    if vi is not None:
+        config.vi_mode = vi
     if theme is not None:
         config.theme = theme
     if shell is not None:
@@ -533,6 +539,8 @@ def main():
         ),
         enable_open_in_editor=True,
         tempfile_suffix=".redis",
+        vi_mode=config.vi_mode,
+        cursor=ModalCursorShapeConfig() if config.vi_mode else None,
     )
 
     # print hello message

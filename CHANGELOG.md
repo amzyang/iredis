@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Feature: vi keybindings for editing the input, like `set -o vi` in bash.
+  Enable with `--vi` or `vi_mode = True` in `iredisrc`. The cursor shape
+  follows the current vi mode: beam for insert mode, block for normal mode.
 - Feature: four built-in [Catppuccin](https://catppuccin.com) themes:
   `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato` and
   `catppuccin-mocha`, generated from the official palette.

@@ -127,6 +127,39 @@ def test_command_theme_options_higher_priority():
     assert config.theme == "default"
 
 
+def test_command_with_vi_mode():
+    from iredis.config import config
+
+    gather_args.main(["iredis"], standalone_mode=False)
+    assert config.vi_mode is False
+
+    gather_args.main(["iredis", "--vi"], standalone_mode=False)
+    assert config.vi_mode is True
+
+
+def test_command_vi_options_higher_priority():
+    from iredis.config import config
+    from textwrap import dedent
+
+    config_content = dedent(
+        """
+        [main]
+        vi_mode = True
+        """
+    )
+    with open("/tmp/iredisrc", "w+") as etc_config:
+        etc_config.write(config_content)
+
+    gather_args.main(["iredis", "--iredisrc", "/tmp/iredisrc"], standalone_mode=False)
+    assert config.vi_mode is True
+
+    gather_args.main(
+        ["iredis", "--no-vi", "--iredisrc", "/tmp/iredisrc"],
+        standalone_mode=False,
+    )
+    assert config.vi_mode is False
+
+
 @pytest.mark.parametrize(
     "url,dsn",
     [
