@@ -1,0 +1,21 @@
+name: Homebrew
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  bump-formula:
+    name: bump-homebrew-formula
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bump iredis formula in amzyang/homebrew-tap
+        uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: iredis
+          formula-path: Formula/iredis.rb
+          homebrew-tap: amzyang/homebrew-tap
+          download-url: https://github.com/amzyang/iredis/archive/refs/tags/${{ github.ref_name }}.tar.gz
+        env:
+          COMMITTER_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
