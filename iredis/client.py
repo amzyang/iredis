@@ -115,6 +115,12 @@ class Client:
         else:
             config.no_version_reason = "--no-info flag activated"
 
+        if config.version is None:
+            try:
+                self.get_server_version_by_hello()
+            except Exception as e:
+                logger.warning(f"[HELLO fallback] {str(e)}")
+
         if self.prompt and "client_addr" in self.prompt:
             self.client_addr = ":".join(
                 str(x) for x in self.connection._sock.getsockname()
@@ -229,6 +235,17 @@ class Client:
         version = re.findall(r"redis_version:(.+)\r\n", info_resp)[0]
         logger.debug(f"[Redis Version] {version}")
         config.version = version
+
+    def get_server_version_by_hello(self):
+        # fallback version detection when INFO is unavailable (--no-info,
+        # or INFO disabled on managed redis), HELLO requires redis >= 6
+        hello_resp = self.execute("HELLO")
+        fields = dict(zip(hello_resp[::2], hello_resp[1::2]))
+        version = fields.get(b"version") or fields.get("version")
+        if version:
+            config.version = nativestr(version)
+            config.no_version_reason = None
+            logger.debug(f"[Redis Version via HELLO] {config.version}")
 
     def __str__(self):
         if self.prompt:  # not None and not empty

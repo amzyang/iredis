@@ -71,10 +71,19 @@ def test_get_server_verison_after_client(config):
     Client("127.0.0.1", "6379", None)
     assert re.match(r"\d+\..*", config.version)
 
-    config.version = "Unknown"
+
+def test_version_fallback_to_hello_when_no_info(config, clean_redis):
+    server_version = clean_redis.info()["redis_version"]
+
+    config.version = None
     config.no_info = True
     Client("127.0.0.1", "6379", None)
-    assert config.version == "Unknown"
+    if int(server_version.split(".")[0]) >= 6:
+        # HELLO (redis >= 6) reports the version even without INFO
+        assert config.version == server_version
+        assert config.no_version_reason is None
+    else:
+        assert config.version is None
 
 
 def test_do_help(config):
