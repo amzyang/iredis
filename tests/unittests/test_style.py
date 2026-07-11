@@ -61,5 +61,30 @@ def test_catppuccin_themes_keep_shared_ui_invariants(theme_name):
         assert theme[token] == default[token], token
 
 
+def test_completion_menu_current_resets_reverse():
+    # prompt_toolkit's built-in UI style puts "reverse" on the current
+    # completion, which swaps every theme's fg/bg pair and makes the
+    # selected completion unreadable unless explicitly reset.
+    for name, theme in THEMES.items():
+        assert "noreverse" in theme["completion-menu.completion.current"], name
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "completion-menu.completion fuzzymatch.outside",
+        "completion-menu.completion fuzzymatch.inside",
+        "completion-menu.completion.current fuzzymatch.outside",
+        "completion-menu.completion.current fuzzymatch.inside",
+    ],
+)
+def test_fuzzy_match_highlight_overridden_by_every_theme(token):
+    # prompt_toolkit's defaults color fuzzy-matched characters with dim
+    # gray / terminal-default fg, unreadable on our menu backgrounds, so
+    # every theme must define its own fg for them.
+    for name, theme in THEMES.items():
+        assert "fg:" in theme[token], name
+
+
 def test_module_level_style_is_default_theme():
     assert STYLE.style_rules == get_style("default").style_rules
