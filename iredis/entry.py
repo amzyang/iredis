@@ -23,6 +23,7 @@ from .config import config, load_config_files
 from .key_bindings import kb as key_bindings
 from .lexer import IRedisLexer
 from .processors import PasswordProcessor, UpdateBottomProcessor, UserInputCommand
+from .sentry import setup_sentry
 from .style import THEMES, get_style
 from .utils import (
     ESCAPE_FLUSH_TIMEOUT,
@@ -534,6 +535,8 @@ def main():
         return
     if not ctx:  # called help
         return
+
+    setup_sentry(config.sentry_dsn, enabled=config.sentry)
 
     # redis client
     client = create_client(ctx.params)

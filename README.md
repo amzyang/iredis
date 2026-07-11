@@ -381,6 +381,20 @@ and change the version in URL):
 
 https://raw.githubusercontent.com/laixintao/iredis/v1.0.4/iredis/data/iredisrc
 
+### Crash Telemetry
+
+IRedis can report its own crashes (unhandled exceptions) to
+[Sentry](https://sentry.io) — never your commands, keys or redis data.
+Telemetry is off unless all of the following hold:
+
+- A DSN is available, resolved in this order: the `IREDIS_SENTRY_DSN`
+  environment variable, `sentry_dsn` in your iredisrc, or a DSN stamped into
+  release builds (empty in source checkouts, i.e. disabled).
+- `sentry-sdk` is installed (`pip install iredis[sentry]`); without it
+  telemetry silently stays off.
+- `sentry = True` in iredisrc (the default). Set `sentry = False` to opt out
+  unconditionally.
+
 ### Keys
 
 IRedis support unix/readline-style REPL keyboard shortcuts, which means keys
