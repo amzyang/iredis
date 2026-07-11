@@ -7,6 +7,7 @@ import os
 import sys
 import codecs
 import logging
+import threading
 from subprocess import run
 from importlib.resources import files
 from packaging.version import parse as version_parse
@@ -36,6 +37,7 @@ from .commands import (
 from .completers import IRedisCompleter
 from .config import config, save_patterns
 from .exceptions import NotRedisCommand, InvalidArguments, AmbiguousCommand, NotSupport
+from .redis_grammar import get_command_grammar
 from .renders import OutputRender
 from .utils import (
     compose_command_syntax,
@@ -89,6 +91,7 @@ class Client:
 
         self.client_id = None
         self.client_addr = None
+        self.version_probe_thread = None
 
         # PATTERN command scan state, (db, group name) -> next cursor
         self.pattern_cursors = {}
@@ -106,20 +109,10 @@ class Client:
             logger.exception("Can not create connection to server")
             print(str(e), file=sys.stderr)
             sys.exit(1)
-        if not config.no_info:
-            try:
-                self.get_server_info()
-            except Exception as e:
-                logger.warning(f"[After Connection] {str(e)}")
-                config.no_version_reason = str(e)
-        else:
-            config.no_version_reason = "--no-info flag activated"
-
         if config.version is None:
-            try:
-                self.get_server_version_by_hello()
-            except Exception as e:
-                logger.warning(f"[HELLO fallback] {str(e)}")
+            # probe in a background thread with a dedicated connection, so a
+            # slow INFO/HELLO response won't block iredis' startup
+            self.start_version_probe()
 
         if self.prompt and "client_addr" in self.prompt:
             self.client_addr = ":".join(
@@ -204,9 +197,14 @@ class Client:
     def auth_compat(self, redis_version: str):
         with_username = version_parse(redis_version) >= version_parse("6.0.0")
         if with_username:
-            command2syntax["AUTH"] = "command_usernamex_password"
+            new_syntax = "command_usernamex_password"
         else:
-            command2syntax["AUTH"] = "command_password"
+            new_syntax = "command_password"
+        if command2syntax["AUTH"] != new_syntax:
+            command2syntax["AUTH"] = new_syntax
+            # the AUTH grammar may have been built and cached with the old
+            # syntax before the background version probe finished
+            get_command_grammar.cache_clear()
 
     def set_default_pager(self, config):
         configured_pager = config.pager
@@ -229,23 +227,85 @@ class Client:
         if not os.environ.get("LESS"):
             os.environ["LESS"] = "-SRXF"
 
-    def get_server_info(self):
+    def get_server_info(self, connection=None):
+        if connection is None:
+            info_resp = self.execute("INFO")
+        else:
+            connection.send_command("INFO")
+            info_resp = connection.read_response()
         # safe to decode Redis's INFO response
-        info_resp = nativestr(self.execute("INFO"))
+        info_resp = nativestr(info_resp)
         version = re.findall(r"redis_version:(.+)\r\n", info_resp)[0]
         logger.debug(f"[Redis Version] {version}")
         config.version = version
 
-    def get_server_version_by_hello(self):
-        # fallback version detection when INFO is unavailable (--no-info,
+    def get_server_version_by_hello(self, connection=None):
+        # fallback version detection when INFO is unavailable (no_info,
         # or INFO disabled on managed redis), HELLO requires redis >= 6
-        hello_resp = self.execute("HELLO")
+        if connection is None:
+            hello_resp = self.execute("HELLO")
+        else:
+            connection.send_command("HELLO")
+            hello_resp = connection.read_response()
         fields = dict(zip(hello_resp[::2], hello_resp[1::2]))
         version = fields.get(b"version") or fields.get("version")
         if version:
             config.version = nativestr(version)
-            config.no_version_reason = None
             logger.debug(f"[Redis Version via HELLO] {config.version}")
+
+    def start_version_probe(self):
+        """Detect the redis-server version in a background daemon thread, so
+        a slow INFO/HELLO response won't block iredis' startup,
+        ``config.version`` is filled back once done."""
+        config.no_version_reason = "version probe is still running in background"
+        self.version_probe_thread = threading.Thread(
+            target=self.probe_server_version, name="version-probe", daemon=True
+        )
+        self.version_probe_thread.start()
+
+    def wait_for_version_probe(self, timeout=None):
+        """Wait at most ``timeout`` seconds for the background version probe.
+        Used before printing greetings, and by tests."""
+        if self.version_probe_thread is not None:
+            self.version_probe_thread.join(timeout)
+
+    def probe_server_version(self):
+        """(Runs in the probe thread.) Detect the server version on a
+        dedicated connection: INFO first, fallback to HELLO (redis >= 6).
+        Never raises, never writes to stdout/stderr, the main connection's
+        response stream is left untouched."""
+        connection = None
+        try:
+            connection = self.create_connection(
+                self.host,
+                self.port,
+                self.db,
+                self.password,
+                self.path,
+                self.scheme,
+                self.username,
+                self.verify_ssl,
+                client_name=self.client_name,
+            )
+            connection.connect()
+            try:
+                self.get_server_info(connection)
+            except Exception as e:
+                logger.warning(f"[version probe] INFO failed: {e}, try HELLO")
+                self.get_server_version_by_hello(connection)
+        except Exception as e:
+            logger.warning(f"[version probe] {e}")
+            config.no_version_reason = str(e)
+            return
+        finally:
+            if connection is not None:
+                connection.disconnect()
+        if config.version is None:
+            config.no_version_reason = "can not detect version via INFO nor HELLO"
+            return
+        config.no_version_reason = None
+        if re.match(r"([\d\.]+)", config.version):
+            self.auth_compat(config.version)
 
     def __str__(self):
         if self.prompt:  # not None and not empty

@@ -1,5 +1,11 @@
 ## UPCOMING
 
+- Feature: redis-server version detection now runs in a background thread with a
+  dedicated connection (`INFO` first, fallback to `HELLO`), so iredis starts
+  instantly even if the server answers `INFO`/`HELLO` slowly; version-related
+  features (peek's memory usage, slowlog fields, AUTH completion syntax) recover
+  automatically once the probe finishes. `no_info = True` now only hides the
+  server version line from the greeting.
 - Feature: support color themes, via `--theme` option or `theme` in iredisrc. The
   new `default` theme only uses the terminal's ANSI colors, so iredis's style stays
   consistent with the terminal color scheme; the original hardcoded color scheme is

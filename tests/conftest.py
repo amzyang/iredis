@@ -75,7 +75,11 @@ def clean_redis():
 
 @pytest.fixture
 def iredis_client():
-    return Client("127.0.0.1", "6379", db=15)
+    client = Client("127.0.0.1", "6379", db=15)
+    # keep test cases deterministic: don't let a straggler probe thread
+    # write the global config after the case has started
+    client.wait_for_version_probe(timeout=5)
+    return client
 
 
 @pytest.fixture

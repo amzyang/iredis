@@ -47,8 +47,12 @@ enable_pager = True
 # By default 'PAGER' environment variable is used
 # pager = less -SRXF
 
-# iredis will send a `INFO` command to get the server's version, this option can
-# disable it
+# iredis detects the redis-server version on startup, in a background thread
+# with a dedicated connection: `INFO` first, fallback to `HELLO` if `INFO`
+# fails. The version only improves experience (AUTH completion syntax, peek's
+# memory usage, slowlog fields), a slow or missing answer never blocks iredis.
+# Set no_info = True to hide the server version line from the greeting, the
+# probe still runs in background.
 no_info = False
 
 # iredis will show command hint on bottom bar, this option can disable it

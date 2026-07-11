@@ -5,6 +5,7 @@ from prompt_toolkit.formatted_text import FormattedText
 
 from iredis.entry import (
     gather_args,
+    greetings,
     parse_url,
     SkipAuthFileHistory,
     write_result,
@@ -355,3 +356,18 @@ def test_natmap_parsed_into_config():
         "node1.example.com:6379": ("127.0.0.1", 6371),
         "node2.example.com:6379": ("127.0.0.1", 6372),
     }
+
+
+def test_greetings_show_server_version(config, capsys):
+    config.version = "7.0.5"
+    greetings()
+    assert "redis-server  7.0.5" in capsys.readouterr().out
+
+
+def test_greetings_hide_server_version_when_no_info(config, capsys):
+    config.version = "7.0.5"
+    config.no_info = True
+    greetings()
+    out = capsys.readouterr().out
+    assert "iredis" in out
+    assert "redis-server" not in out

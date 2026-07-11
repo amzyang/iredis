@@ -68,26 +68,61 @@ def test_patch_completer():
 
 
 def test_get_server_verison_after_client(config):
-    Client("127.0.0.1", "6379", None)
+    client = Client("127.0.0.1", "6379", None)
+    client.wait_for_version_probe(timeout=5)
+    assert re.match(r"\d+\..*", config.version)
+    assert config.no_version_reason is None
+
+
+def test_version_probe_still_runs_when_no_info(config):
+    # no_info only hides the version line from the greeting, the
+    # background probe still runs
+    config.no_info = True
+    client = Client("127.0.0.1", "6379", None)
+    client.wait_for_version_probe(timeout=5)
     assert re.match(r"\d+\..*", config.version)
 
 
-def test_version_fallback_to_hello_when_no_info(config, clean_redis):
+def test_version_probe_fallback_to_hello_when_info_fails(config, clean_redis):
     server_version = clean_redis.info()["redis_version"]
 
-    config.version = None
-    config.no_info = True
-    Client("127.0.0.1", "6379", None)
+    with patch.object(
+        Client, "get_server_info", side_effect=redis.exceptions.ResponseError("nope")
+    ):
+        client = Client("127.0.0.1", "6379", None)
+        client.wait_for_version_probe(timeout=5)
+
     if int(server_version.split(".")[0]) >= 6:
-        # HELLO (redis >= 6) reports the version even without INFO
+        # HELLO (redis >= 6) reports the version even when INFO fails
         assert config.version == server_version
         assert config.no_version_reason is None
     else:
         assert config.version is None
+        assert config.no_version_reason
+
+
+def test_version_probe_disconnects_connection(config):
+    fake_connection = MagicMock()
+    fake_connection.read_response.return_value = b"# Server\r\nredis_version:6.2.5\r\n"
+    client = Client("127.0.0.1", "6379", None)
+    client.wait_for_version_probe(timeout=5)
+
+    config.version = None
+    old_syntax = command2syntax["AUTH"]
+    try:
+        with patch.object(Client, "create_connection", return_value=fake_connection):
+            client.probe_server_version()
+        assert config.version == "6.2.5"
+        assert config.no_version_reason is None
+        assert fake_connection.disconnect.called
+        assert command2syntax["AUTH"] == "command_usernamex_password"
+    finally:
+        command2syntax["AUTH"] = old_syntax
 
 
 def test_do_help(config):
     client = Client("127.0.0.1", "6379", None)
+    client.wait_for_version_probe(timeout=5)
     config.version = "5.0.0"
     resp = client.do_help("SET")
     assert resp[10] == ("", "1.0.0 (Available on your redis-server: 5.0.0)")

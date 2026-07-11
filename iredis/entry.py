@@ -53,16 +53,16 @@ def setup_log():
 
 
 def greetings():
-    iredis_version = f"iredis  {__version__} (Python {platform.python_version()})"
-    if config.no_version_reason:
-        reason = f"({config.no_version_reason})"
-    else:
-        reason = ""
-
-    server_version = f"redis-server  {config.version or 'Unknown'} {reason}"
-    home_page = "Home:   https://iredis.xbin.io/"
-    issues = "Issues: https://github.com/laixintao/iredis/issues"
-    display = "\n".join([iredis_version, server_version, home_page, issues])
+    lines = [f"iredis  {__version__} (Python {platform.python_version()})"]
+    if not config.no_info:
+        if config.no_version_reason:
+            reason = f"({config.no_version_reason})"
+        else:
+            reason = ""
+        lines.append(f"redis-server  {config.version or 'Unknown'} {reason}")
+    lines.append("Home:   https://iredis.xbin.io/")
+    lines.append("Issues: https://github.com/laixintao/iredis/issues")
+    display = "\n".join(lines)
     if config.raw:
         display = display.encode()
     write_result(display)
@@ -535,5 +535,10 @@ def main():
 
     # print hello message
     if config.greetings:
+        if not config.no_info:
+            # bounded wait so the greeting can show the server version:
+            # normal servers finish the probe in milliseconds, a slow
+            # server only delays the greeting by 1 second at most
+            client.wait_for_version_probe(timeout=1)
         greetings()
     repl(client, session, enter_main_time)
