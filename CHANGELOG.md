@@ -3,6 +3,8 @@
 - Feature: four built-in [Catppuccin](https://catppuccin.com) themes:
   `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato` and
   `catppuccin-mocha`, generated from the official palette.
+- Bugfix: the `PATTERN BROWSE` key browser now follows the configured theme
+  instead of always using the default one.
 
 ## 2.1.1
 

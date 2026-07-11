@@ -33,7 +33,8 @@ from prompt_toolkit.layout import (
     Window,
 )
 
-from .style import STYLE
+from .config import config
+from .style import get_style
 from .utils import ensure_str
 
 logger = logging.getLogger(__name__)
@@ -232,6 +233,6 @@ class PatternBrowser:
             layout=Layout(root),
             key_bindings=kb,
             full_screen=True,
-            style=STYLE,
+            style=get_style(config.theme),
         )
         return application.run()
