@@ -23,6 +23,12 @@ jobs:
           version="${TAG#v}"
           url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${TAG}.tar.gz"
           curl -fsSL "$url" -o release.tar.gz
+          pkg_version=$(tar -xzOf release.tar.gz --wildcards '*/pyproject.toml' \
+            | grep -m1 '^version = ' | cut -d'"' -f2)
+          if [ "$pkg_version" != "$version" ]; then
+            echo "Tag ${TAG} does not match pyproject.toml version ${pkg_version}" >&2
+            exit 1
+          fi
           {
             echo "version=${version}"
             echo "url=${url}"
