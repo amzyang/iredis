@@ -20,3 +20,16 @@ def _(event):
     event.current_buffer.complete_state = None
     b = event.app.current_buffer
     b.complete_state = None
+
+
+@kb.add("f3")
+def _(event):
+    """F3: prefill `PATTERN BROWSE ` and pop the group-name completion menu.
+
+    Only fires on an empty prompt, so it never clobbers typed input.
+    """
+    buf = event.app.current_buffer
+    if buf.text:
+        return
+    buf.insert_text("PATTERN BROWSE ")
+    buf.start_completion(select_first=False)

@@ -143,6 +143,7 @@ commands_summary.update(
                 "Browse a pattern group's keys in an interactive dual-pane"
                 " view: Up/Down to select, Space to scan more, Tab to toggle"
                 " the detail pane, Enter to peek the key back in the REPL."
+                " Press F3 on an empty prompt as a shortcut."
             ),
             "arguments": [{"name": "group", "type": "string"}],
             "complexity": "O(1) for every scan.",

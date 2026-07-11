@@ -64,7 +64,9 @@ like `KEYS *` (see
   <kbd>↑</kbd>/<kbd>↓</kbd> to move the selection, the right pane shows the
   selected key's `PEEK` detail, <kbd>Space</kbd> scans more keys,
   <kbd>Tab</kbd> toggles the detail pane, <kbd>d</kbd><kbd>d</kbd> deletes,
-  <kbd>Enter</kbd> exits and peeks the picked key back in the REPL.
+  <kbd>Enter</kbd> exits and peeks the picked key back in the REPL. Press
+  <kbd>F3</kbd> on an empty prompt to prefill `PATTERN BROWSE ` with a
+  group-name completion menu.
 - <kbd>Ctrl</kbd> + <kbd>C</kbd> to cancel the current typed command, this won't
   exit IRedis, exactly like bash behaviour. Use <kbd>Ctrl</kbd> + <kbd>D</kbd>
   to send a EOF to exit IRedis.
