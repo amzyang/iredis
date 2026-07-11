@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from textwrap import dedent
 
@@ -11,7 +10,8 @@ def test_history_not_log_auth(cli):
     cli.sendline("set foo bar")
     cli.expect("OK")
 
-    with open(os.path.expanduser("~/.iredis_history")) as history_file:
+    # the cli fixture isolates history here, away from ~/.iredis_history
+    with open("/tmp/.iredis_test_history") as history_file:
         content = history_file.read()
 
     assert "set foo bar" in content
