@@ -34,7 +34,7 @@ from .commands import (
     split_unknown_args,
 )
 from .completers import IRedisCompleter
-from .config import config, save_patterns
+from .config import config
 from .data import commands as commands_data
 from .exceptions import AmbiguousCommand, InvalidArguments, NotRedisCommand, NotSupport
 from .redis_grammar import get_command_grammar
@@ -42,7 +42,6 @@ from .renders import OutputRender
 from .utils import (
     compose_command_syntax,
     convert_formatted_text_to_bytes,
-    ensure_str,
     exit,
     nativestr,
     parse_url,
@@ -93,8 +92,6 @@ class Client:
         self.client_addr = None
         self.version_probe_thread = None
 
-        # PATTERN command scan state, (db, group name) -> next cursor
-        self.pattern_cursors = {}
         # completer of current REPL session, updated on every send_command
         self._completer = None
 
@@ -339,14 +336,8 @@ class Client:
             yield self.do_help(*args)
         if command == "PEEK":
             yield from self.do_peek(*args)
-        if command == "PATTERN":
-            yield from self.do_pattern(*args)
-        if command == "PATTERN ADD":
-            yield from self.do_pattern_add(*args)
-        if command == "PATTERN RM":
-            yield from self.do_pattern_rm(*args)
-        if command == "PATTERN BROWSE":
-            yield from self.do_pattern_browse(*args)
+        if command == "BROWSE":
+            yield from self.do_browse(*args)
         if command == "CLEAR":
             clear()
         if command == "EXIT":
@@ -549,7 +540,7 @@ class Client:
                 raw_command, completer
             )
         logger.info(f"[Prepare command] Redis: {redis_command}, Shell: {shell_command}")
-        # client-side commands (e.g. PATTERN) also want to update completers
+        # client-side commands (e.g. BROWSE) also want to update completers
         self._completer = completer
         try:
             try:
@@ -878,20 +869,12 @@ class Client:
             return
         yield FormattedText(flat_formatted_text_pair)
 
-    # PATTERN group names that collide with PATTERN's own subcommands
-    PATTERN_RESERVED_NAMES = ("ADD", "RM", "BROWSE")
     # stop scanning early once a batch collected this many keys
-    PATTERN_BATCH_SIZE = 100
-
-    def _yield_formatted(self, formatted_text_tuples):
-        if config.raw:
-            yield convert_formatted_text_to_bytes(formatted_text_tuples)
-            return
-        yield FormattedText(formatted_text_tuples)
+    SCAN_BATCH_SIZE = 100
 
     def scan_keys(self, pattern, cursor=0):
         """
-        SCAN keys matching pattern, one batch (~PATTERN_BATCH_SIZE keys) per
+        SCAN keys matching pattern, one batch (~SCAN_BATCH_SIZE keys) per
         call, returns (keys, next_cursor). next_cursor is 0 when the full
         keyspace iteration finished.
         """
@@ -905,7 +888,7 @@ class Client:
             iterations += 1
             if cursor == 0:
                 break
-            if len(keys) >= self.PATTERN_BATCH_SIZE:
+            if len(keys) >= self.SCAN_BATCH_SIZE:
                 break
             # safety guard for pathological cases, keep the REPL responsive
             if iterations >= 1000:
@@ -920,96 +903,6 @@ class Client:
                 count_hint = 1000
         return keys, cursor
 
-    def do_pattern(self, name=None, cursor=None):
-        """
-        PATTERN command implementation.
-
-        Without argument, list saved pattern groups. With a group name, scan
-        keys matching the group's pattern, one batch (~100 keys) at a time.
-        The scan cursor is remembered per (db, group): running the same
-        command again continues scanning; passing a cursor explicitly
-        (e.g. ``PATTERN group 0``) scans from there.
-        """
-        if name is None:
-            rendered = []
-            if not config.patterns:
-                yield (
-                    "No pattern group yet, use `PATTERN ADD <group> <pattern>`"
-                    " to create one. E.g.: PATTERN ADD users user:*"
-                )
-                return
-            for group, pattern in config.patterns.items():
-                rendered.extend(
-                    [
-                        ("class:group", group),
-                        ("", ": "),
-                        ("class:pattern", pattern),
-                        renders.NEWLINE_TUPLE,
-                    ]
-                )
-            yield from self._yield_formatted(rendered[:-1])
-            return
-
-        pattern = config.patterns.get(name)
-        if pattern is None:
-            yield self._missing_group_hint(name)
-            return
-
-        state_key = (self.db, name)
-        if cursor is None:
-            cursor = self.pattern_cursors.get(state_key, 0)
-            continued = cursor != 0
-        else:
-            cursor = int(cursor)
-            continued = False
-
-        keys, cursor = self.scan_keys(pattern, cursor)
-
-        if cursor:
-            self.pattern_cursors[state_key] = cursor
-        else:
-            self.pattern_cursors.pop(state_key, None)
-
-        types = self._fetch_types(keys)
-
-        # scanned keys are candidates of next commands' key argument
-        if self._completer:
-            self._completer.key_completer.touch_words(ensure_str(keys))
-
-        rendered = [
-            ("class:dockey", "pattern: "),
-            ("class:pattern", pattern),
-            ("", "  (group: "),
-            ("class:group", name),
-            ("", ")"),
-            renders.NEWLINE_TUPLE,
-        ]
-        for key, key_type in zip(keys, types):
-            rendered.extend(
-                [
-                    ("class:string", key_type.ljust(8)),
-                    ("class:key", ensure_str(key)),
-                    renders.NEWLINE_TUPLE,
-                ]
-            )
-        if not keys:
-            rendered.append(("class:type", "(no key matched in this batch)"))
-            rendered.append(renders.NEWLINE_TUPLE)
-        if cursor:
-            rendered.append(
-                (
-                    "class:dockey",
-                    f"({len(keys)} keys in this batch, cursor {cursor}. Run"
-                    f" `PATTERN {name}` again to continue scanning.)",
-                )
-            )
-        else:
-            done_hint = "scan finished" if continued else "full scan finished"
-            rendered.append(
-                ("class:dockey", f"({len(keys)} keys in this batch, {done_hint}.)")
-            )
-        yield from self._yield_formatted(rendered)
-
     def _fetch_types(self, keys):
         """Fetch key types with one pipelined round-trip."""
         if not keys:
@@ -1018,82 +911,22 @@ class Client:
             self.connection.send_command("TYPE", key)
         return [nativestr(self.connection.read_response()) for _ in keys]
 
-    def _missing_group_hint(self, name):
-        if not config.patterns:
-            return (
-                f"Pattern group '{name}' doesn't exist. No pattern group saved"
-                " yet, use `PATTERN ADD <group> <pattern>` to create one."
-                " E.g.: PATTERN ADD users user:*"
-            )
-        groups_hint = ", ".join(config.patterns)
-        return (
-            f"Pattern group '{name}' doesn't exist. Saved groups:"
-            f" {groups_hint}. Use `PATTERN ADD {name} <pattern>` to create it."
-        )
-
-    def do_pattern_browse(self, name=None):
-        if name is None:
+    def do_browse(self, pattern=None):
+        if pattern is None:
             # bare BROWSE: sidebar over the whole keyspace, like Medis
             pattern = "*"
-        else:
-            pattern = config.patterns.get(name)
-            if pattern is None:
-                yield self._missing_group_hint(name)
-                return
         if config.raw or not sys.stdout.isatty():
-            yield "PATTERN BROWSE needs an interactive terminal, no --raw or pipes."
+            yield "BROWSE needs an interactive terminal, no --raw or pipes."
             return
 
         # local import: keep REPL startup free of layout modules
-        from .browser import PatternBrowser
+        from .browser import KeyBrowser
 
-        browser = PatternBrowser(self, name or "*", pattern)
+        browser = KeyBrowser(self, pattern)
         picked = browser.run()
-        # like PATTERN scan, browsed keys feed the key completer
+        # browsed keys feed the key completer of following commands
         if self._completer and browser.seen_keys:
             self._completer.key_completer.touch_words(browser.seen_keys)
         if picked is not None:
             # leave a record of the picked key in the REPL scrollback
             yield from self.do_peek(picked)
-
-    def do_pattern_add(self, name=None, pattern=None):
-        if not name or not pattern:
-            yield (
-                "Usage: PATTERN ADD <group> <pattern>. E.g.: PATTERN ADD users user:*"
-            )
-            return
-        if name.upper() in self.PATTERN_RESERVED_NAMES:
-            yield (
-                f"'{name}' is a subcommand of PATTERN, can't be used as a group name."
-            )
-            return
-        config.patterns[name] = pattern
-        iredisrc = save_patterns(config.patterns)
-        yield from self._yield_formatted(
-            [
-                ("class:group", name),
-                ("", ": "),
-                ("class:pattern", pattern),
-                ("", f" saved to {iredisrc}"),
-            ]
-        )
-
-    def do_pattern_rm(self, name=None):
-        if not name:
-            yield "Usage: PATTERN RM <group>"
-            return
-        if name not in config.patterns:
-            yield f"Pattern group '{name}' doesn't exist."
-            return
-        del config.patterns[name]
-        iredisrc = save_patterns(config.patterns)
-        # drop remembered scan cursors of this group, for all dbs
-        for state_key in list(self.pattern_cursors):
-            if state_key[1] == name:
-                del self.pattern_cursors[state_key]
-        yield from self._yield_formatted(
-            [
-                ("class:group", name),
-                ("", f" removed from {iredisrc}"),
-            ]
-        )

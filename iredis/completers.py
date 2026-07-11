@@ -143,27 +143,6 @@ class TimestampCompleter(Completer):
         yield from sorted(completions, key=lambda a: a.text)
 
 
-class PatternGroupCompleter(Completer):
-    """
-    Completer for PATTERN command's group names.
-
-    Reads the saved groups from ``config.patterns`` on every completion, so
-    that ``PATTERN ADD``/``PATTERN RM`` take effect immediately.
-    """
-
-    def get_completions(
-        self, document: Document, complete_event: CompleteEvent
-    ) -> Iterable[Completion]:
-        text = document.text_before_cursor
-        for name, pattern in (config.patterns or {}).items():
-            if name.startswith(text):
-                yield Completion(
-                    name,
-                    start_position=-len(text),
-                    display_meta=str(pattern),
-                )
-
-
 class IRedisCompleter(Completer):
     """
     Completer class that can dynamically returns any Completer.
@@ -365,8 +344,6 @@ class IRedisCompleter(Completer):
                 "inttype": integer_type_completer,
                 "categoryname": categoryname_completer,
                 "username": username_completer,
-                # PATTERN command's saved group names
-                "pattern_name": PatternGroupCompleter(),
             }
         )
 

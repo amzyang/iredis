@@ -18,13 +18,13 @@ def make_event(buffer_text):
     return event
 
 
-def test_f3_prefills_pattern_browse_on_empty_prompt():
+def test_f3_runs_browse_on_empty_prompt():
     event = make_event("")
     get_f3_handler()(event)
 
     buf = event.app.current_buffer
-    buf.insert_text.assert_called_once_with("PATTERN BROWSE ")
-    buf.start_completion.assert_called_once_with(select_first=False)
+    buf.insert_text.assert_called_once_with("BROWSE")
+    buf.validate_and_handle.assert_called_once_with()
 
 
 def test_f3_is_noop_when_prompt_not_empty():
@@ -33,4 +33,4 @@ def test_f3_is_noop_when_prompt_not_empty():
 
     buf = event.app.current_buffer
     buf.insert_text.assert_not_called()
-    buf.start_completion.assert_not_called()
+    buf.validate_and_handle.assert_not_called()

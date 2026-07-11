@@ -107,50 +107,18 @@ commands_summary.update(
             "since": "1.0",
             "group": "iredis",
         },
-        "PATTERN": {
+        "BROWSE": {
             "summary": (
-                "List saved pattern groups, or scan keys matching a group's"
-                " pattern. Scan continues from the last cursor, run the same"
-                " command again to fetch more keys."
+                "Browse keys matching a pattern (default `*`) in an"
+                " interactive dual-pane view, grouped into a collapsible"
+                " tree by `:` namespaces. Up/Down to select, Left/Right to"
+                " fold/unfold, Space to scan more, Enter to peek the key"
+                " back in the REPL. Press F3 on an empty prompt as a"
+                " shortcut."
             ),
-            "arguments": [
-                {"name": "group", "type": "string", "optional": True},
-                {"name": "cursor", "type": "integer", "optional": True},
-            ],
-            "complexity": "O(1) for every scan call.",
-            "since": "1.16",
-            "group": "iredis",
-        },
-        "PATTERN ADD": {
-            "summary": "Save a key pattern group to iredisrc.",
-            "arguments": [
-                {"name": "group", "type": "string"},
-                {"name": "pattern", "type": "pattern"},
-            ],
-            "complexity": "O(1).",
-            "since": "1.16",
-            "group": "iredis",
-        },
-        "PATTERN RM": {
-            "summary": "Remove a saved key pattern group from iredisrc.",
-            "arguments": [{"name": "group", "type": "string"}],
-            "complexity": "O(1).",
-            "since": "1.16",
-            "group": "iredis",
-        },
-        "PATTERN BROWSE": {
-            "summary": (
-                "Browse keys in an interactive dual-pane view, grouped into"
-                " a collapsible tree by `:` namespaces. Without argument"
-                " browse the whole keyspace, with a group name browse the"
-                " group's pattern. Up/Down to select, Left/Right to"
-                " fold/unfold, Space to scan more, Tab to toggle the detail"
-                " pane, Enter to peek the key back in the REPL. Press F3 on"
-                " an empty prompt as a shortcut."
-            ),
-            "arguments": [{"name": "group", "type": "string", "optional": True}],
+            "arguments": [{"name": "pattern", "type": "pattern", "optional": True}],
             "complexity": "O(1) for every scan.",
-            "since": "1.16",
+            "since": "2.4",
             "group": "iredis",
         },
     }

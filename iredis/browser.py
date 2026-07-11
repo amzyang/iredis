@@ -1,11 +1,11 @@
 """
-Interactive dual-pane key browser for the ``PATTERN BROWSE`` command.
+Interactive dual-pane key browser for the ``BROWSE`` command.
 
 Runs a temporary full-screen prompt_toolkit Application on the terminal's
 alternate screen: the left pane lists keys matching a pattern (scanned
 incrementally with SCAN, one batch at a time), grouped into a collapsible
 namespace tree by ``:`` segments like Medis' sidebar; the right pane shows
-the selected key's detail (reusing PEEK). Without a group argument the
+the selected key's detail (reusing PEEK). Without a pattern argument the
 whole keyspace (``*``) is browsed. When the browser exits, the alternate
 screen is dropped and the REPL, along with its scrollback, is restored
 untouched.
@@ -127,10 +127,9 @@ def single_chain_paths(keys, separator=SEPARATOR):
         items = children
 
 
-class PatternBrowser:
-    def __init__(self, client, group, pattern):
+class KeyBrowser:
+    def __init__(self, client, pattern):
         self.client = client
-        self.group = group
         self.pattern = pattern
         # (key, type) pairs, both str, in scan order
         self.keys = []
@@ -240,8 +239,8 @@ class PatternBrowser:
         )
         return [
             ("class:bottom-toolbar", " browse "),
-            ("class:bottom-toolbar.group", self.group),
-            ("class:bottom-toolbar", f" ({self.pattern})  {len(self.keys)} keys"),
+            ("class:bottom-toolbar.group", self.pattern),
+            ("class:bottom-toolbar", f"  {len(self.keys)} keys"),
             ("class:bottom-toolbar", f"  [{state}] "),
         ]
 

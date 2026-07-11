@@ -354,9 +354,6 @@ sorted_set,ZRANGESTORE,command_any,render_int
 sorted_set,ZUNION,command_any,render_list
 iredis,HELP,command_command,
 iredis,PEEK,command_key,
-iredis,PATTERN,command_patternnamex_cursorx,
-iredis,PATTERN ADD,command_patternname_pattern,
-iredis,PATTERN RM,command_patternname,
-iredis,PATTERN BROWSE,command_patternnamex,
+iredis,BROWSE,command_patternx,
 iredis,CLEAR,command,
 iredis,EXIT,command,

@@ -53,13 +53,7 @@ like `KEYS *` (see
   `get`/`lrange`/`sscan`, etc, depending on types. You don't need to call the
   `type` command then type another command to get the value. `peek` will also
   display the key's length and memory usage.
-- `pattern` command to manage named key-pattern groups (saved in `iredisrc`)
-  and browse the keys matching a group. `PATTERN ADD users user:*` saves a
-  group, then `PATTERN users` scans a batch of matching keys along with their
-  types; run it again to continue scanning from the last cursor, no need to
-  copy cursors around. Scanned keys also feed the completion of the following
-  commands' key argument.
-- `PATTERN BROWSE [group]` opens an interactive dual-pane key browser (on the
+- `BROWSE [pattern]` opens an interactive dual-pane key browser (on the
   terminal's alternate screen, your scrollback stays untouched). Without an
   argument it browses the whole keyspace; keys are grouped into a collapsible
   tree by `:` namespaces (like Medis' sidebar), scanned one batch at a time.
@@ -68,8 +62,9 @@ like `KEYS *` (see
   work too), the right pane shows the selected key's `PEEK`
   detail, <kbd>Space</kbd> scans more keys, <kbd>Tab</kbd> toggles the detail
   pane, <kbd>d</kbd><kbd>d</kbd> deletes, <kbd>Enter</kbd> exits and peeks
-  the picked key back in the REPL. Press <kbd>F3</kbd> on an empty prompt to
-  prefill `PATTERN BROWSE ` with a group-name completion menu.
+  the picked key back in the REPL. Browsed keys also feed the completion of
+  the following commands' key argument. Press <kbd>F3</kbd> on an empty
+  prompt to open the browser directly.
 - <kbd>Ctrl</kbd> + <kbd>C</kbd> to cancel the current typed command, this won't
   exit IRedis, exactly like bash behaviour. Use <kbd>Ctrl</kbd> + <kbd>D</kbd>
   to send a EOF to exit IRedis.

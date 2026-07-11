@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from iredis.browser import PatternBrowser, single_chain_paths, tree_rows
+from iredis.browser import KeyBrowser, single_chain_paths, tree_rows
 
 MEDIS_KEYS = [
     ("task:scheduler:device_load:xiaohongshu", "zset"),
@@ -78,7 +78,7 @@ def make_browser(keys, cursor=0):
     client = MagicMock()
     client.scan_keys.return_value = ([key for key, _ in keys], cursor)
     client._fetch_types.return_value = [key_type for _, key_type in keys]
-    return PatternBrowser(client, "users", "user:*")
+    return KeyBrowser(client, "user:*")
 
 
 def test_browser_auto_expands_single_chain_and_selects_first_key():
