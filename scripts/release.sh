@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-    echo "用法: $0 X.Y.Z" >&2
+if [[ $# -gt 1 ]]; then
+    echo "用法: $0 [X.Y.Z]（不带版本号时默认 minor 递增）" >&2
     exit 1
 fi
 
-version="${1#v}" # 接受 2.2.2 或 v2.2.2
+version="${1:-}"
+if [[ -z "$version" ]]; then
+    version="$(uv version --bump minor --dry-run --short)"
+else
+    version="${version#v}" # 接受 2.2.2 或 v2.2.2
+fi
+echo "发布版本: ${version}"
 
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-    echo "版本号格式应为 X.Y.Z,收到: $1" >&2
+    echo "版本号格式应为 X.Y.Z,收到: ${version}" >&2
     exit 1
 }
 [[ "$(git branch --show-current)" == "main" ]] || {

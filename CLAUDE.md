@@ -2,9 +2,10 @@
 
 ## 发布流程注意事项
 
-- 发布统一走本地命令 `just release X.Y.Z`(即 `bash scripts/release.sh X.Y.Z`):
-  自动 `uv version` 升级 `pyproject.toml`/`uv.lock`、commit、打 tag、
-  一次推送 main 与 tag;本地凭证推的 tag 会正常触发 Homebrew workflow。
+- 发布统一走本地命令 `just release [X.Y.Z]`(即 `bash scripts/release.sh`,
+  不带版本号时默认 minor 递增):自动 `uv version` 升级 `pyproject.toml`/
+  `uv.lock`、commit、打 tag、一次推送 main 与 tag;本地凭证推的 tag 会正常
+  触发 Homebrew workflow。
 - 如手动打 release tag(`vX.Y.Z`),必须先把 `pyproject.toml` 的 `version` 升级为
   `X.Y.Z`,并运行 `uv lock` 同步 `uv.lock`,提交后再在该提交(或其后)打 tag。
 - `.github/workflows/homebrew.yaml` 会下载 tag 对应的 tarball,校验其中
