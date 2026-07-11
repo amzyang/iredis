@@ -540,7 +540,7 @@ def main():
         ),
         enable_open_in_editor=True,
         tempfile_suffix=".redis",
-        vi_mode=config.vi_mode,
+        vi_mode=config.vi_mode,  # ty: ignore[invalid-argument-type]
         cursor=ModalCursorShapeConfig() if config.vi_mode else None,
     )
 
