@@ -952,12 +952,7 @@ class Client:
 
         pattern = config.patterns.get(name)
         if pattern is None:
-            groups_hint = ", ".join(config.patterns) or "<empty>"
-            yield (
-                f"Pattern group '{name}' doesn't exist. Saved groups:"
-                f" {groups_hint}. Use `PATTERN ADD {name} <pattern>` to"
-                " create it."
-            )
+            yield self._missing_group_hint(name)
             return
 
         state_key = (self.db, name)
@@ -1023,18 +1018,26 @@ class Client:
             self.connection.send_command("TYPE", key)
         return [nativestr(self.connection.read_response()) for _ in keys]
 
+    def _missing_group_hint(self, name):
+        if not config.patterns:
+            return (
+                f"Pattern group '{name}' doesn't exist. No pattern group saved"
+                " yet, use `PATTERN ADD <group> <pattern>` to create one."
+                " E.g.: PATTERN ADD users user:*"
+            )
+        groups_hint = ", ".join(config.patterns)
+        return (
+            f"Pattern group '{name}' doesn't exist. Saved groups:"
+            f" {groups_hint}. Use `PATTERN ADD {name} <pattern>` to create it."
+        )
+
     def do_pattern_browse(self, name=None):
         if not name:
             yield "Usage: PATTERN BROWSE <group>"
             return
         pattern = config.patterns.get(name)
         if pattern is None:
-            groups_hint = ", ".join(config.patterns) or "<empty>"
-            yield (
-                f"Pattern group '{name}' doesn't exist. Saved groups:"
-                f" {groups_hint}. Use `PATTERN ADD {name} <pattern>` to"
-                " create it."
-            )
+            yield self._missing_group_hint(name)
             return
         if config.raw or not sys.stdout.isatty():
             yield "PATTERN BROWSE needs an interactive terminal, no --raw or pipes."

@@ -753,9 +753,27 @@ def test_pattern_add_reserved_name(iredis_client, config, tmp_path):
     assert config.patterns == {}
 
 
-def test_pattern_scan_unknown_group(iredis_client, config):
+def test_pattern_scan_unknown_group_without_saved_groups(iredis_client, config):
     out = _run_client_command(iredis_client, "PATTERN nosuch")
     assert "doesn't exist" in out
+    assert "No pattern group saved yet" in out
+    assert "<empty>" not in out
+    assert "PATTERN ADD nosuch" not in out
+
+
+def test_pattern_browse_unknown_group_without_saved_groups(iredis_client, config):
+    out = _run_client_command(iredis_client, "PATTERN BROWSE nosuch")
+    assert "doesn't exist" in out
+    assert "No pattern group saved yet" in out
+    assert "<empty>" not in out
+    assert "PATTERN ADD nosuch" not in out
+
+
+def test_pattern_unknown_group_lists_saved_groups(iredis_client, config):
+    config.patterns = {"users": "user:*"}
+    out = _run_client_command(iredis_client, "PATTERN nosuch")
+    assert "Saved groups: users" in out
+    assert "PATTERN ADD nosuch <pattern>" in out
 
 
 def test_pattern_scan_in_batches_until_finished(
