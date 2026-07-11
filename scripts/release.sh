@@ -2,13 +2,13 @@
 set -euo pipefail
 
 if [[ $# -gt 1 ]]; then
-    echo "用法: $0 [X.Y.Z]（不带版本号时默认 minor 递增）" >&2
+    echo "用法: $0 [X.Y.Z]（不带版本号时默认 patch 递增）" >&2
     exit 1
 fi
 
 version="${1:-}"
 if [[ -z "$version" ]]; then
-    version="$(uv version --bump minor --dry-run --short)"
+    version="$(uv version --bump patch --dry-run --short)"
 else
     version="${version#v}" # 接受 2.2.2 或 v2.2.2
 fi
