@@ -9,6 +9,15 @@ on:
 jobs:
   test:
     name: Pytest
+    # docs/ci/chore 前缀的 commit 推 main 时跳过；PR 事件无 head_commit，始终执行
+    if: >-
+      github.event_name != 'push' ||
+      (!startsWith(github.event.head_commit.message, 'docs:') &&
+       !startsWith(github.event.head_commit.message, 'docs(') &&
+       !startsWith(github.event.head_commit.message, 'ci:') &&
+       !startsWith(github.event.head_commit.message, 'ci(') &&
+       !startsWith(github.event.head_commit.message, 'chore:') &&
+       !startsWith(github.event.head_commit.message, 'chore('))
     strategy:
       fail-fast: false
       matrix:
@@ -41,6 +50,14 @@ jobs:
 
   lint:
     name: ruff & ty
+    if: >-
+      github.event_name != 'push' ||
+      (!startsWith(github.event.head_commit.message, 'docs:') &&
+       !startsWith(github.event.head_commit.message, 'docs(') &&
+       !startsWith(github.event.head_commit.message, 'ci:') &&
+       !startsWith(github.event.head_commit.message, 'ci(') &&
+       !startsWith(github.event.head_commit.message, 'chore:') &&
+       !startsWith(github.event.head_commit.message, 'chore('))
     runs-on: ubuntu-latest
 
     steps:
