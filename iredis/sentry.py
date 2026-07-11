@@ -15,14 +15,14 @@ logger = logging.getLogger(__name__)
 # Release-build fallback DSN, the Python counterpart of an ldflags-injected
 # value: the release process may stamp a real DSN here; an empty string
 # (local checkouts, forks) means telemetry disabled — never a failure.
-BUILD_DSN = ""
+SENTRY_DSN = ""
 
 DSN_ENVIRON = "IREDIS_SENTRY_DSN"
 
 
 def resolve_dsn(config_dsn=None, environ=os.environ):
     """DSN priority: environment variable > iredisrc > build-time fallback."""
-    return environ.get(DSN_ENVIRON) or config_dsn or BUILD_DSN
+    return environ.get(DSN_ENVIRON) or config_dsn or SENTRY_DSN
 
 
 def setup_sentry(config_dsn=None, enabled=True, environ=os.environ):
