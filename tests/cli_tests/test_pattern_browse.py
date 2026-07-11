@@ -23,6 +23,8 @@ IREDISRC_CONTENT = (
     "log_location =\n"
     "warning = False\n"
     "enable_pager = False\n"
+    # keep test commands out of the user's real ~/.iredis_history
+    "history_location = /tmp/.iredis_test_history\n"
     "[patterns]\n"
     "users = user:*\n"
 )

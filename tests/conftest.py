@@ -131,6 +131,7 @@ def raw_cli():
         [main]
         log_location =
         warning = True
+        history_location = /tmp/.iredis_test_history
         """
     )
 
