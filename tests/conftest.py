@@ -69,7 +69,9 @@ def clean_redis():
     """
     Return a empty redis db. (redis-py client)
     """
-    client = redis.StrictRedis(db=15)
+    # protocol=2: redis-py 8 defaults to RESP3 (HELLO 3), which redis-server 5
+    # doesn't understand
+    client = redis.StrictRedis(db=15, protocol=2)
     client.flushdb()
     return client
 
