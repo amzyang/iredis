@@ -24,7 +24,13 @@ from .key_bindings import kb as key_bindings
 from .lexer import IRedisLexer
 from .processors import PasswordProcessor, UpdateBottomProcessor, UserInputCommand
 from .style import THEMES, get_style
-from .utils import convert_formatted_text_to_bytes, exit, parse_url, timer
+from .utils import (
+    ESCAPE_FLUSH_TIMEOUT,
+    convert_formatted_text_to_bytes,
+    exit,
+    parse_url,
+    timer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -490,6 +496,27 @@ def create_client(params):
     )
 
 
+def create_prompt_session():
+    session = PromptSession(
+        history=SkipAuthFileHistory(
+            Path(os.path.expanduser(config.history_location))  # ty: ignore[no-matching-overload]
+        ),
+        style=get_style(config.theme),
+        auto_suggest=AutoSuggestFromHistory(),
+        complete_while_typing=True,
+        lexer=IRedisLexer(),
+        completer=IRedisCompleter(
+            hint=config.newbie_mode, completion_casing=config.completion_casing
+        ),
+        enable_open_in_editor=True,
+        tempfile_suffix=".redis",
+        vi_mode=config.vi_mode,  # ty: ignore[invalid-argument-type]
+        cursor=ModalCursorShapeConfig() if config.vi_mode else None,
+    )
+    session.app.ttimeoutlen = ESCAPE_FLUSH_TIMEOUT
+    return session
+
+
 def main():
     enter_main_time = time.time()  # just for logs
 
@@ -526,23 +553,7 @@ def main():
         logger.warning("[OVER] command executed, exit...")
         return
 
-    # prompt session
-    session = PromptSession(
-        history=SkipAuthFileHistory(
-            Path(os.path.expanduser(config.history_location))  # ty: ignore[no-matching-overload]
-        ),
-        style=get_style(config.theme),
-        auto_suggest=AutoSuggestFromHistory(),
-        complete_while_typing=True,
-        lexer=IRedisLexer(),
-        completer=IRedisCompleter(
-            hint=config.newbie_mode, completion_casing=config.completion_casing
-        ),
-        enable_open_in_editor=True,
-        tempfile_suffix=".redis",
-        vi_mode=config.vi_mode,  # ty: ignore[invalid-argument-type]
-        cursor=ModalCursorShapeConfig() if config.vi_mode else None,
-    )
+    session = create_prompt_session()
 
     # print hello message
     if config.greetings:

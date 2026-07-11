@@ -35,7 +35,7 @@ from prompt_toolkit.layout import (
 
 from .config import config
 from .style import get_style
-from .utils import ensure_str
+from .utils import ESCAPE_FLUSH_TIMEOUT, ensure_str
 
 logger = logging.getLogger(__name__)
 
@@ -235,4 +235,5 @@ class PatternBrowser:
             full_screen=True,
             style=get_style(config.theme),
         )
+        application.ttimeoutlen = ESCAPE_FLUSH_TIMEOUT
         return application.run()
