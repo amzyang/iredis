@@ -14,16 +14,16 @@ def test_resolve_dsn_env_var_wins():
     )
 
 
-def test_resolve_dsn_config_over_build_dsn(monkeypatch):
-    monkeypatch.setattr("iredis.sentry.BUILD_DSN", "https://build@sentry.io/3")
+def test_resolve_dsn_config_over_stamped_dsn(monkeypatch):
+    monkeypatch.setattr("iredis.sentry.SENTRY_DSN", "https://build@sentry.io/3")
     assert (
         resolve_dsn(config_dsn="https://rc@sentry.io/2", environ={})
         == "https://rc@sentry.io/2"
     )
 
 
-def test_resolve_dsn_falls_back_to_build_dsn(monkeypatch):
-    monkeypatch.setattr("iredis.sentry.BUILD_DSN", "https://build@sentry.io/3")
+def test_resolve_dsn_falls_back_to_stamped_dsn(monkeypatch):
+    monkeypatch.setattr("iredis.sentry.SENTRY_DSN", "https://build@sentry.io/3")
     assert resolve_dsn(config_dsn="", environ={}) == "https://build@sentry.io/3"
 
 
