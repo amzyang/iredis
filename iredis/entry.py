@@ -60,8 +60,8 @@ def greetings():
         else:
             reason = ""
         lines.append(f"redis-server  {config.version or 'Unknown'} {reason}")
-    lines.append("Home:   https://iredis.xbin.io/")
-    lines.append("Issues: https://github.com/laixintao/iredis/issues")
+    lines.append("Home:   https://github.com/amzyang/iredis")
+    lines.append("Issues: https://github.com/amzyang/iredis/issues")
     display = "\n".join(lines)
     if config.raw:
         display = display.encode()

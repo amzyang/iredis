@@ -36,8 +36,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/laixintao/iredis"
-Repository = "https://github.com/laixintao/iredis"
+Homepage = "https://github.com/amzyang/iredis"
+Repository = "https://github.com/amzyang/iredis"
 
 [project.scripts]
 iredis = "iredis.entry:main"

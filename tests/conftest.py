@@ -117,7 +117,7 @@ def cli():
         dimensions=(40, 120),
     )
     child.logfile_read = open("cli_test.log", "ab")
-    child.expect(["https://github.com/laixintao/iredis/issues", "127.0.0.1"])
+    child.expect(["https://github.com/amzyang/iredis/issues", "127.0.0.1"])
     yield child
     child.close()
 
@@ -141,7 +141,7 @@ def raw_cli():
         f"iredis --raw -n 15 --iredisrc {TEST_IREDISRC}", timeout=TIMEOUT
     )
     child.logfile_read = open("cli_test.log", "ab")
-    child.expect(["https://github.com/laixintao/iredis/issues", "127.0.0.1"])
+    child.expect(["https://github.com/amzyang/iredis/issues", "127.0.0.1"])
     yield child
     child.close()
 
