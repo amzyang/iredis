@@ -1,10 +1,13 @@
 from unittest.mock import MagicMock
 
 from prompt_toolkit.completion import CompleteEvent
+from prompt_toolkit.data_structures import Point
 from prompt_toolkit.document import Document
 from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 
 from iredis.browser import (
+    TREE_WIDTH,
     KeyBrowser,
     RecentPatternCompleter,
     normalize_pattern,
@@ -241,7 +244,7 @@ def test_browser_rerun_with_same_pattern_not_duplicated():
 def test_browser_apply_pattern_resets_state():
     browser = make_browser([("user:1", "string"), ("user:2", "string")])
     browser.index = 2
-    browser.detail_window.vertical_scroll = 3
+    browser.detail_pane.vertical_scroll = 3
     browser.client.scan_keys.return_value = (["queue:a", "queue:b"], 0)
     browser.client._fetch_types.return_value = ["list", "list"]
 
@@ -252,7 +255,7 @@ def test_browser_apply_pattern_resets_state():
     assert [key for key, _ in browser.keys] == ["queue:a", "queue:b"]
     assert browser.expanded == {"queue"}
     assert browser.rows()[browser.index][0] == "key"
-    assert browser.detail_window.vertical_scroll == 0
+    assert browser.detail_pane.vertical_scroll == 0
     # keys of every browsed pattern feed the REPL completer on exit
     assert set(browser.seen_keys) == {"user:1", "user:2", "queue:a", "queue:b"}
 
@@ -348,16 +351,118 @@ def test_detail_bindings_scroll_and_move_resets():
 
     handlers["j"](event)
     handlers["j"](event)
-    assert browser.detail_window.vertical_scroll == 2
+    assert browser.detail_pane.vertical_scroll == 2
     handlers["k"](event)
-    assert browser.detail_window.vertical_scroll == 1
+    assert browser.detail_pane.vertical_scroll == 1
     handlers["k"](event)
     handlers["k"](event)  # clamped at the top
-    assert browser.detail_window.vertical_scroll == 0
+    assert browser.detail_pane.vertical_scroll == 0
 
-    browser.detail_window.vertical_scroll = 5
+    browser.detail_pane.vertical_scroll = 5
     browser.move(1)
-    assert browser.detail_window.vertical_scroll == 0
+    assert browser.detail_pane.vertical_scroll == 0
+
+
+def test_detail_pane_keeps_manual_scroll():
+    # the ScrollablePane must not chase an invisible cursor back to the
+    # top: both keep-visible behaviours are disabled
+    browser = make_browser([("user:1", "string")])
+    assert not browser.detail_pane.keep_cursor_visible()
+    assert not browser.detail_pane.keep_focused_window_visible()
+
+
+# === mouse support ===
+
+
+def mouse(event_type):
+    return MouseEvent(
+        position=Point(0, 0),
+        event_type=event_type,
+        button=MouseButton.LEFT,
+        modifiers=frozenset(),
+    )
+
+
+def row_fragments(browser):
+    """key_rows fragments grouped per visible row, newlines dropped."""
+    rows, current = [], []
+    for fragment in browser.key_rows():
+        if fragment[1] == "\n":
+            rows.append(current)
+            current = []
+        else:
+            current.append(fragment)
+    return rows
+
+
+def test_key_rows_fragments_carry_mouse_handlers():
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    for row in row_fragments(browser):
+        assert all(len(fragment) == 3 and callable(fragment[2]) for fragment in row)
+
+
+def test_keys_panel_has_fixed_width():
+    browser = make_browser([("user:1", "string")])
+    assert browser.tree_window.width == TREE_WIDTH
+
+
+def test_selected_row_background_spans_panel_width():
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    rows = row_fragments(browser)
+    selected = [
+        fragment for row in rows for fragment in row if fragment[0] == "class:selected"
+    ]
+    assert len(selected) == 1
+    assert len(selected[0][1]) == TREE_WIDTH  # padded to fill the panel
+
+
+def test_tree_click_selects_key_row(monkeypatch):
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    handler = row_fragments(browser)[2][0][2]  # the user:2 key row
+    app = MagicMock()
+    monkeypatch.setattr("iredis.browser.get_app", lambda: app)
+
+    handler(mouse(MouseEventType.MOUSE_UP))
+
+    assert browser.index == 2
+    assert browser.selected_key == "user:2"
+    app.layout.focus.assert_called_once_with(browser.tree_window)
+
+
+def test_tree_click_on_group_row_toggles_fold(monkeypatch):
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    handler = row_fragments(browser)[0][0][2]  # the open "user" group row
+    monkeypatch.setattr("iredis.browser.get_app", lambda: MagicMock())
+
+    handler(mouse(MouseEventType.MOUSE_UP))
+
+    assert browser.rows() == [("group", "user", 2, 0, False)]
+
+
+def test_tree_wheel_scrolls_selection():
+    browser = make_browser([(f"user:{i}", "string") for i in range(10)])
+    handler = row_fragments(browser)[0][0][2]
+    browser.index = 1
+
+    handler(mouse(MouseEventType.SCROLL_DOWN))
+    assert browser.index == 4
+    handler(mouse(MouseEventType.SCROLL_UP))
+    assert browser.index == 1
+
+
+def test_detail_mouse_wheel_scrolls_and_click_focuses(monkeypatch):
+    browser = make_browser([("user:1", "string")])
+    app = MagicMock()
+    monkeypatch.setattr("iredis.browser.get_app", lambda: app)
+
+    browser.detail_mouse_handler(mouse(MouseEventType.SCROLL_DOWN))
+    assert browser.detail_pane.vertical_scroll == 3
+    browser.detail_mouse_handler(mouse(MouseEventType.SCROLL_UP))
+    browser.detail_mouse_handler(mouse(MouseEventType.SCROLL_UP))
+    assert browser.detail_pane.vertical_scroll == 0  # clamped at the top
+
+    browser.detail_mouse_handler(mouse(MouseEventType.MOUSE_UP))
+    app.layout.focus.assert_called_once_with(browser.detail_window)
 
 
 # === copy shortcuts ===

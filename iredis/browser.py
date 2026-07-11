@@ -24,6 +24,10 @@ Key bindings:
     y / Y                    copy the selected key's value / name
     d d                      delete the selected key (press twice to confirm)
     q / Esc / Ctrl-C         exit
+
+The mouse works too: click a key to select it (a group folds/unfolds),
+the wheel scrolls either pane, and a click on the 🔍 box edits the
+pattern.
 """
 
 import logging
@@ -44,10 +48,12 @@ from prompt_toolkit.layout import (
     FormattedTextControl,
     HSplit,
     Layout,
+    ScrollablePane,
     VSplit,
     Window,
 )
 from prompt_toolkit.layout.menus import CompletionsMenu
+from prompt_toolkit.mouse_events import MouseEventType
 
 from .config import config
 from .style import get_style
@@ -57,6 +63,8 @@ logger = logging.getLogger(__name__)
 
 # rows used by the pattern bar and the footer around the key list
 CHROME_HEIGHT = 2
+# fixed width of the keys panel, like Medis' sidebar
+TREE_WIDTH = 40
 # namespace separator for grouping keys into a tree, like Medis
 SEPARATOR = ":"
 # buckets smaller than this render as plain keys instead of a group
@@ -246,7 +254,7 @@ class KeyBrowser:
         self.scan_finished = False
         self.confirm_delete = False
         self._detail_cache.clear()
-        self.detail_window.vertical_scroll = 0
+        self.detail_pane.vertical_scroll = 0
         self.load_more()
         self.expanded = set(single_chain_paths(self.keys))
         self.index = self._first_key_row()
@@ -300,7 +308,7 @@ class KeyBrowser:
         rows = self.rows()
         if rows:
             self.index = max(0, min(len(rows) - 1, self.index + delta))
-        self.detail_window.vertical_scroll = 0
+        self.detail_pane.vertical_scroll = 0
 
     def toggle_selected(self):
         """Fold/unfold the selected group; False when not on a group row."""
@@ -327,8 +335,42 @@ class KeyBrowser:
         for i in range(self.index - 1, -1, -1):
             if rows[i][0] == "group" and rows[i][3] < row[3]:
                 self.index = i
-                self.detail_window.vertical_scroll = 0
+                self.detail_pane.vertical_scroll = 0
                 return
+
+    def tree_row_mouse_handler(self, row_index):
+        """Row-scoped mouse handler: a click selects the row (and folds or
+        unfolds a group), the wheel moves the selection."""
+
+        def handler(mouse_event):
+            if mouse_event.event_type == MouseEventType.SCROLL_DOWN:
+                self.move(3)
+            elif mouse_event.event_type == MouseEventType.SCROLL_UP:
+                self.move(-3)
+            elif mouse_event.event_type == MouseEventType.MOUSE_UP:
+                self.confirm_delete = False
+                self.notice = None
+                get_app().layout.focus(self.tree_window)
+                self.index = row_index
+                self.detail_pane.vertical_scroll = 0
+                self.toggle_selected()
+            else:
+                return NotImplemented
+
+        return handler
+
+    def detail_mouse_handler(self, mouse_event):
+        """The wheel scrolls the detail pane, a click focuses it."""
+        pane = self.detail_pane
+        if mouse_event.event_type == MouseEventType.SCROLL_DOWN:
+            # the pane clips the bottom overshoot while it has the focus
+            pane.vertical_scroll += 3
+        elif mouse_event.event_type == MouseEventType.SCROLL_UP:
+            pane.vertical_scroll = max(0, pane.vertical_scroll - 3)
+        elif mouse_event.event_type == MouseEventType.MOUSE_UP:
+            get_app().layout.focus(self.detail_window)
+        else:
+            return NotImplemented
 
     def copy_selected_key(self):
         key = self.selected_key
@@ -418,27 +460,28 @@ class KeyBrowser:
         for i, row in list(enumerate(rows))[start : start + page]:
             selected = i == self.index
             indent = "  " * row[3]
+            click = self.tree_row_mouse_handler(i)
             if row[0] == "group":
                 _, path, count, _, is_open = row
                 name = path.rsplit(SEPARATOR, 1)[-1]
                 arrow = "▾" if is_open else "▸"
                 if selected:
-                    out.append(
-                        (
-                            "class:selected",
-                            f" {indent}{arrow} {name}  {self._count_text(count)}",
-                        )
-                    )
+                    # pad so the highlight covers the whole panel width
+                    text = f" {indent}{arrow} {name}  {self._count_text(count)}"
+                    out.append(("class:selected", text.ljust(TREE_WIDTH), click))
                 else:
-                    out.append(("class:group", f" {indent}{arrow} {name}"))
-                    out.append(("class:type", f"  {self._count_text(count)}"))
+                    out.append(("class:group", f" {indent}{arrow} {name}", click))
+                    out.append(("class:type", f"  {self._count_text(count)}", click))
             else:
                 _, key, key_type, _ = row
                 if selected:
-                    out.append(("class:selected", f" {indent}{key_type:8}{key}"))
+                    text = f" {indent}{key_type:8}{key}"
+                    out.append(("class:selected", text.ljust(TREE_WIDTH), click))
                 else:
-                    out.append((f"class:type-{key_type}", f" {indent}{key_type:8}"))
-                    out.append(("class:key", key))
+                    out.append(
+                        (f"class:type-{key_type}", f" {indent}{key_type:8}", click)
+                    )
+                    out.append(("class:key", key, click))
             out.append(("", "\n"))
         return out
 
@@ -480,7 +523,7 @@ class KeyBrowser:
         self.input_window = Window(
             BufferControl(self.pattern_buffer, key_bindings=self.input_key_bindings()),
             height=1,
-            style="class:pattern",
+            style="class:pattern underline",
         )
         self.tree_window = Window(
             FormattedTextControl(
@@ -488,27 +531,45 @@ class KeyBrowser:
                 focusable=True,
                 key_bindings=self.tree_key_bindings(),
             ),
-            width=Dimension(weight=1),
+            width=TREE_WIDTH,
         )
         self.detail_window = Window(
             FormattedTextControl(
-                lambda: FormattedText(self.detail_rows()),
+                lambda: FormattedText(
+                    [
+                        (style, text, self.detail_mouse_handler)
+                        for style, text in self.detail_rows()
+                    ]
+                ),
                 focusable=True,
                 key_bindings=self.detail_key_bindings(),
             ),
-            width=Dimension(weight=1),
             wrap_lines=True,
+        )
+        # a plain Window resets its scroll to chase the (invisible) cursor
+        # on every repaint; the pane keeps manual scrolling and shows a
+        # scrollbar
+        self.detail_pane = ScrollablePane(
+            self.detail_window,
+            keep_cursor_visible=False,
+            keep_focused_window_visible=False,
+            display_arrows=False,
+            width=Dimension(weight=1),
         )
 
     def _root_container(self):
+        # the underlined run (padding + input) reads as one input box,
+        # opened by the magnifier icon like a searchbox
         pattern_bar = VSplit(
             [
                 Window(
-                    FormattedTextControl(" pattern: "),
+                    FormattedTextControl(" 🔍 "),
                     dont_extend_width=True,
                     style="class:bottom-toolbar",
                 ),
+                Window(width=1, char=" ", style="class:pattern underline"),
                 self.input_window,
+                Window(width=1, char=" ", style="class:pattern underline"),
                 Window(
                     FormattedTextControl(lambda: FormattedText(self.stats_text())),
                     dont_extend_width=True,
@@ -520,7 +581,7 @@ class KeyBrowser:
             [
                 self.tree_window,
                 Window(width=1, char="│", style="class:bottom-toolbar"),
-                self.detail_window,
+                self.detail_pane,
             ]
         )
         footer = Window(
@@ -594,9 +655,9 @@ class KeyBrowser:
 
         def scroll(delta_of_event):
             def handler(event):
-                window = self.detail_window
-                window.vertical_scroll = max(
-                    0, window.vertical_scroll + delta_of_event(event)
+                pane = self.detail_pane
+                pane.vertical_scroll = max(
+                    0, pane.vertical_scroll + delta_of_event(event)
                 )
 
             return handler
@@ -666,6 +727,7 @@ class KeyBrowser:
             layout=Layout(self._root_container(), focused_element=self.tree_window),
             key_bindings=self.app_key_bindings(),
             full_screen=True,
+            mouse_support=True,
             style=get_style(config.theme),
         )
         application.ttimeoutlen = ESCAPE_FLUSH_TIMEOUT

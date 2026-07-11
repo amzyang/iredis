@@ -67,7 +67,9 @@ like `KEYS *` (see
   <kbd>Tab</kbd> moves the focus there to scroll it. <kbd>Space</kbd> scans
   more keys, <kbd>y</kbd>/<kbd>Y</kbd> copies the selected key's value/name
   to the clipboard, <kbd>d</kbd><kbd>d</kbd> deletes, <kbd>Enter</kbd> exits
-  and peeks the picked key back in the REPL. Browsed keys also feed the
+  and peeks the picked key back in the REPL. The mouse works too: click a
+  row to select it (a group folds/unfolds), the wheel scrolls either pane,
+  a click on the 🔍 box edits the pattern. Browsed keys also feed the
   completion of the following commands' key argument. Press <kbd>F3</kbd> on
   an empty prompt to open the browser directly.
 - <kbd>Ctrl</kbd> + <kbd>C</kbd> to cancel the current typed command, this won't
