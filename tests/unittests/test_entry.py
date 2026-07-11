@@ -1,3 +1,4 @@
+import sys
 import tempfile
 from unittest.mock import patch
 
@@ -9,6 +10,7 @@ from iredis.entry import (
     gather_args,
     greetings,
     is_too_tall,
+    main,
     parse_url,
     write_result,
 )
@@ -407,3 +409,23 @@ def test_greetings_hide_server_version_when_no_info(config, capsys):
     out = capsys.readouterr().out
     assert "iredis" in out
     assert "redis-server" not in out
+
+
+@pytest.mark.parametrize("shell", ["bash", "zsh", "fish"])
+def test_shell_completion_source_short_circuits_main(monkeypatch, capsys, shell):
+    monkeypatch.setattr(sys, "argv", ["iredis"])
+    monkeypatch.setenv("_IREDIS_COMPLETE", f"{shell}_source")
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+    assert exc_info.value.code == 0
+    assert "_IREDIS_COMPLETE" in capsys.readouterr().out
+
+
+def test_shell_completion_completes_options(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["iredis"])
+    monkeypatch.setenv("_IREDIS_COMPLETE", "zsh_complete")
+    monkeypatch.setenv("COMP_WORDS", "iredis --the")
+    monkeypatch.setenv("COMP_CWORD", "1")
+    with pytest.raises(SystemExit):
+        main()
+    assert "--theme" in capsys.readouterr().out
