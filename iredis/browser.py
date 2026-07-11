@@ -54,6 +54,7 @@ from prompt_toolkit.layout import (
 )
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.mouse_events import MouseEventType
+from prompt_toolkit.utils import get_cwidth
 
 from .config import config
 from .style import get_style
@@ -69,6 +70,18 @@ TREE_WIDTH = 40
 SEPARATOR = ":"
 # buckets smaller than this render as plain keys instead of a group
 GROUP_MIN_KEYS = 2
+# columns of the keys panel's type column: a 4-char abbreviation + a space
+TYPE_WIDTH = 5
+
+# short type names for the type column; full words waste the narrow panel
+TYPE_ABBREV = {
+    "string": "str",
+    "list": "list",
+    "set": "set",
+    "hash": "hash",
+    "zset": "zset",
+    "stream": "strm",
+}
 
 # per-type command to fetch a key's raw value for the clipboard
 VALUE_COMMANDS = {
@@ -162,6 +175,28 @@ def _clip_str(value):
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return str(value)
+
+
+def _fit(text, width):
+    """Truncate text to the display width, appending ``…`` when clipped.
+
+    Widths follow the terminal cells (CJK characters take two), so the
+    keys panel clips loudly instead of prompt_toolkit's silent cut."""
+    if get_cwidth(text) <= width:
+        return text
+    used = 0
+    out = []
+    for char in text:
+        used += get_cwidth(char)
+        if used > width - 1:
+            break
+        out.append(char)
+    return "".join(out) + "…"
+
+
+def _pad(text):
+    """Pad by display width so the highlight covers the whole panel."""
+    return text + " " * max(0, TREE_WIDTH - get_cwidth(text))
 
 
 def value_text(client, key, key_type):
@@ -389,7 +424,7 @@ class KeyBrowser:
         text = value_text(self.client, key, key_type)
         if text is None:
             # no plain representation (e.g. stream): copy the detail text
-            text = "".join(fragment for _, fragment in self.detail_rows())
+            text = "".join(fragment for _, fragment in self._key_detail(key))
         copy_to_clipboard(text, get_app().output)
         self.notice = f"value copied ({len(text)} chars)"
 
@@ -463,39 +498,39 @@ class KeyBrowser:
             click = self.tree_row_mouse_handler(i)
             if row[0] == "group":
                 _, path, count, _, is_open = row
-                name = path.rsplit(SEPARATOR, 1)[-1]
+                count_text = f"  {self._count_text(count)}"
+                # the count stays visible, the name gets whatever is left
+                name = _fit(
+                    path.rsplit(SEPARATOR, 1)[-1],
+                    max(4, TREE_WIDTH - 3 - len(indent) - get_cwidth(count_text)),
+                )
                 arrow = "▾" if is_open else "▸"
                 if selected:
-                    # pad so the highlight covers the whole panel width
-                    text = f" {indent}{arrow} {name}  {self._count_text(count)}"
-                    out.append(("class:selected", text.ljust(TREE_WIDTH), click))
+                    text = f" {indent}{arrow} {name}{count_text}"
+                    out.append(("class:selected", _pad(text), click))
                 else:
                     out.append(("class:group", f" {indent}{arrow} {name}", click))
-                    out.append(("class:type", f"  {self._count_text(count)}", click))
+                    out.append(("class:type", count_text, click))
             else:
                 _, key, key_type, _ = row
+                abbrev = TYPE_ABBREV.get(key_type, key_type[:4])
+                name = _fit(key, TREE_WIDTH - 1 - len(indent) - TYPE_WIDTH)
                 if selected:
-                    text = f" {indent}{key_type:8}{key}"
-                    out.append(("class:selected", text.ljust(TREE_WIDTH), click))
+                    text = f" {indent}{abbrev:{TYPE_WIDTH}}{name}"
+                    out.append(("class:selected", _pad(text), click))
                 else:
                     out.append(
-                        (f"class:type-{key_type}", f" {indent}{key_type:8}", click)
+                        (
+                            f"class:type-{key_type}",
+                            f" {indent}{abbrev:{TYPE_WIDTH}}",
+                            click,
+                        )
                     )
-                    out.append(("class:key", key, click))
+                    out.append(("class:key", name, click))
             out.append(("", "\n"))
         return out
 
-    def detail_rows(self):
-        row = self.selected_row
-        if row is None:
-            return []
-        if row[0] == "group":
-            _, path, count, _, _ = row
-            return [
-                ("class:group", path),
-                ("class:type", f"{SEPARATOR}*  {self._count_text(count)}"),
-            ]
-        key = row[1]
+    def _key_detail(self, key):
         if key not in self._detail_cache:
             try:
                 detail = []
@@ -509,6 +544,20 @@ class KeyBrowser:
                 logger.exception(e)
                 self._detail_cache[key] = [("class:error", f"(error) {str(e)}")]
         return self._detail_cache[key]
+
+    def detail_rows(self):
+        row = self.selected_row
+        if row is None:
+            return []
+        if row[0] == "group":
+            _, path, count, _, _ = row
+            return [
+                ("class:group", path),
+                ("class:type", f"{SEPARATOR}*  {self._count_text(count)}"),
+            ]
+        key = row[1]
+        # the full name heads the pane: the tree may have clipped it
+        return [("class:key", key), ("", "\n"), *self._key_detail(key)]
 
     # === layout & key bindings ===
 

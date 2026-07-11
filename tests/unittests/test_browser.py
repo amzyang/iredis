@@ -6,10 +6,13 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 
+from prompt_toolkit.utils import get_cwidth
+
 from iredis.browser import (
     TREE_WIDTH,
     KeyBrowser,
     RecentPatternCompleter,
+    _fit,
     normalize_pattern,
     single_chain_paths,
     tree_rows,
@@ -86,6 +89,26 @@ def test_single_chain_paths_descends_nested_single_chain():
 def test_single_chain_paths_empty_for_mixed_root():
     keys = [("user:1", "string"), ("queue:1", "list"), ("online", "string")]
     assert single_chain_paths(keys) == []
+
+
+def test_fit_returns_short_text_unchanged():
+    assert _fit("abc", 10) == "abc"
+    assert _fit("abcde", 5) == "abcde"
+
+
+def test_fit_truncates_with_ellipsis():
+    assert _fit("abcdefgh", 5) == "abcd…"
+
+
+def test_fit_counts_cjk_double_width():
+    # 中/文 take two cells each: 4 cells + the … fill the 5 columns
+    assert _fit("中文名字", 5) == "中文…"
+    assert _fit("中文", 4) == "中文"
+
+
+def test_fit_tiny_width_degrades_to_ellipsis():
+    assert _fit("abc", 1) == "…"
+    assert _fit("abc", 0) == "…"
 
 
 def make_browser(keys, cursor=0, pattern="user:*", history=None):
@@ -416,6 +439,42 @@ def test_selected_row_background_spans_panel_width():
     assert len(selected[0][1]) == TREE_WIDTH  # padded to fill the panel
 
 
+def test_key_rows_type_column_uses_abbreviations():
+    browser = make_browser([("user:1", "string"), ("user:2", "stream")])
+    style, text, _ = row_fragments(browser)[2][0]  # the unselected user:2 row
+    assert style == "class:type-stream"  # colors keep the full type name
+    assert text == "   strm "
+
+
+def test_key_rows_unknown_type_clipped_to_column():
+    browser = make_browser([("user:1", "string"), ("user:2", "ReJSON-RL")])
+    assert row_fragments(browser)[2][0][1] == "   ReJS "
+
+
+def test_key_rows_long_key_truncated_with_ellipsis():
+    long_key = "user:" + "x" * 60
+    browser = make_browser([(long_key, "string"), ("user:2", "string")])
+    text = row_fragments(browser)[1][0][1]  # the selected long-key row
+    assert text.endswith("…")
+    assert len(text) == TREE_WIDTH
+
+
+def test_selected_cjk_row_padded_by_display_width():
+    long_key = "用户:" + "中" * 30
+    browser = make_browser([(long_key, "string"), ("用户:2", "string")])
+    text = row_fragments(browser)[1][0][1]
+    assert "…" in text
+    assert get_cwidth(text) == TREE_WIDTH
+
+
+def test_group_row_long_name_truncated_count_stays_visible():
+    name = "very-long-namespace-" + "x" * 40
+    browser = make_browser([(f"{name}:1", "string"), (f"{name}:2", "string")])
+    group_row = row_fragments(browser)[0]
+    assert group_row[0][1].endswith("…")
+    assert group_row[1][1] == "  2 keys"
+
+
 def test_tree_click_selects_key_row(monkeypatch):
     browser = make_browser([("user:1", "string"), ("user:2", "string")])
     handler = row_fragments(browser)[2][0][2]  # the user:2 key row
@@ -547,3 +606,34 @@ def test_copy_on_group_row_flashes_notice_without_clipboard(monkeypatch):
     assert "select a key" in browser.notice
     browser.copy_selected_key()
     assert "select a key" in browser.notice
+
+
+# === detail pane ===
+
+
+def test_detail_rows_start_with_full_key_name():
+    # the tree clips long names: the pane is the only place showing it all
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    browser.client.do_peek.return_value = ["key: string (embstr), ttl: -1"]
+    browser.index = 1  # user:1
+
+    assert browser.detail_rows() == [
+        ("class:key", "user:1"),
+        ("", "\n"),
+        ("", "key: string (embstr), ttl: -1"),
+    ]
+
+
+def test_copy_stream_value_falls_back_to_detail_without_header(monkeypatch):
+    browser = make_browser([("user:1", "stream"), ("user:2", "string")])
+    copied = {}
+    monkeypatch.setattr(
+        "iredis.browser.copy_to_clipboard",
+        lambda text, output=None: copied.setdefault("text", text),
+    )
+    browser.client.do_peek.return_value = ["XINFO: ..."]
+    browser.index = 1  # user:1
+
+    browser.copy_selected_value()
+
+    assert copied["text"] == "XINFO: ..."  # no key-name header line
