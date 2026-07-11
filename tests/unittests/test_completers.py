@@ -1,11 +1,15 @@
 from unittest.mock import MagicMock
 
 from freezegun import freeze_time
-from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.completion import Completion
+from prompt_toolkit.formatted_text import FormattedText
 
-from iredis.completers import MostRecentlyUsedFirstWordCompleter
-from iredis.completers import IRedisCompleter, TimestampCompleter, IntegerTypeCompleter
+from iredis.completers import (
+    IntegerTypeCompleter,
+    IRedisCompleter,
+    MostRecentlyUsedFirstWordCompleter,
+    TimestampCompleter,
+)
 
 
 def test_LUF_completer_touch():

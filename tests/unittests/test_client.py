@@ -3,10 +3,10 @@ import re
 from textwrap import dedent
 from unittest.mock import MagicMock, patch
 
-from packaging.version import parse as version_parse
-from prompt_toolkit.formatted_text import FormattedText
 import pytest
 import redis
+from packaging.version import parse as version_parse
+from prompt_toolkit.formatted_text import FormattedText
 
 from iredis.client import Client
 from iredis.commands import command2syntax

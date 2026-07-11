@@ -2,49 +2,49 @@
 IRedis client.
 """
 
-import re
-import os
-import sys
 import codecs
 import logging
+import os
+import re
+import sys
 import threading
-from subprocess import run
 from importlib.resources import files
-from packaging.version import parse as version_parse
+from subprocess import run
 
 import redis
-from prompt_toolkit.shortcuts import clear
+from packaging.version import parse as version_parse
 from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.shortcuts import clear
 from redis.connection import Connection, SSLConnection, UnixDomainSocketConnection
 from redis.exceptions import (
     AuthenticationError,
     ConnectionError,
     MovedError,
-    TimeoutError,
     ResponseError,
+    TimeoutError,
 )
 
 from . import markdown, renders
-from .data import commands as commands_data
 from .commands import (
     command2callback,
-    commands_summary,
     command2syntax,
+    commands_summary,
     groups,
     split_command_args,
     split_unknown_args,
 )
 from .completers import IRedisCompleter
 from .config import config, save_patterns
-from .exceptions import NotRedisCommand, InvalidArguments, AmbiguousCommand, NotSupport
+from .data import commands as commands_data
+from .exceptions import AmbiguousCommand, InvalidArguments, NotRedisCommand, NotSupport
 from .redis_grammar import get_command_grammar
 from .renders import OutputRender
 from .utils import (
     compose_command_syntax,
-    ensure_str,
-    nativestr,
-    exit,
     convert_formatted_text_to_bytes,
+    ensure_str,
+    exit,
+    nativestr,
     parse_url,
 )
 from .warning import confirm_dangerous_command
@@ -182,6 +182,9 @@ class Client:
             }
             connection_class = UnixDomainSocketConnection
 
+        # redis-py 8 defaults to RESP3, but iredis only speaks RESP2
+        connection_kwargs["protocol"] = 2
+
         if config.decode:
             connection_kwargs["encoding"] = config.decode
             connection_kwargs["decode_responses"] = True
@@ -192,7 +195,7 @@ class Client:
             f" connection_kwargs={connection_kwargs}"
         )
 
-        return connection_class(**connection_kwargs)
+        return connection_class(**connection_kwargs)  # ty: ignore[invalid-argument-type]
 
     def auth_compat(self, redis_version: str):
         with_username = version_parse(redis_version) >= version_parse("6.0.0")
@@ -371,7 +374,7 @@ class Client:
             try:
                 if need_refresh_connection:
                     print(
-                        f"{str(last_error)} retrying... retry left: {retry_times+1}",
+                        f"{str(last_error)} retrying... retry left: {retry_times + 1}",
                         file=sys.stderr,
                     )
                     connection.disconnect()
@@ -552,7 +555,7 @@ class Client:
             try:
                 command_name, args = split_command_args(redis_command)
             except (InvalidArguments, AmbiguousCommand):
-                logger.warn(
+                logger.warning(
                     "This is not a iredis known command, send to redis-server anyway..."
                 )
                 command_name, args = split_unknown_args(redis_command)
@@ -635,7 +638,7 @@ class Client:
         if completer:
             completer.update_completer_for_response(command_name, args, response)
 
-    def pre_hook(self, command, command_name, args, completer: IRedisCompleter):
+    def pre_hook(self, command, command_name, args, completer: IRedisCompleter | None):
         """
         Before execute command, patch completers first.
         Eg: When user run `GET foo`, key completer need to
@@ -700,9 +703,9 @@ class Client:
         # FIXME anything strange with single quotes?
         logger.debug(f"[--version--] '{server_version}'")
         try:
-            is_available = version_parse(server_version) > version_parse(
-                available_version
-            )
+            is_available = version_parse(
+                server_version  # ty: ignore[invalid-argument-type]
+            ) > version_parse(available_version)
         except Exception as e:
             logger.exception(e)
             is_available = None
@@ -773,7 +776,9 @@ class Client:
             else:
                 first_10 = self.execute(f"LRANGE {key} 0 9")
                 last_10 = self.execute(f"LRANGE {key} -10 -1")
-                contents = first_10 + [f"{llen-20} elements was omitted ..."] + last_10
+                contents = (
+                    first_10 + [f"{llen - 20} elements was omitted ..."] + last_10
+                )
             yield FormattedText([("class:dockey", "elements: ")])
             yield renders.OutputRender.render_list(contents)
 
@@ -1050,14 +1055,12 @@ class Client:
     def do_pattern_add(self, name=None, pattern=None):
         if not name or not pattern:
             yield (
-                "Usage: PATTERN ADD <group> <pattern>. E.g.:"
-                " PATTERN ADD users user:*"
+                "Usage: PATTERN ADD <group> <pattern>. E.g.: PATTERN ADD users user:*"
             )
             return
         if name.upper() in self.PATTERN_RESERVED_NAMES:
             yield (
-                f"'{name}' is a subcommand of PATTERN, can't be used as a"
-                " group name."
+                f"'{name}' is a subcommand of PATTERN, can't be used as a group name."
             )
             return
         config.patterns[name] = pattern

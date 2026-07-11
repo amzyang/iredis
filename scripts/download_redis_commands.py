@@ -5,11 +5,11 @@ Download all Reids commands from https://redis.io/commands.
 Output to csv format.
 """
 
-import sys
 import csv
+import sys
 
-from lxml import etree
 import requests
+from lxml import etree
 
 stdout_writer = csv.writer(sys.stdout)
 

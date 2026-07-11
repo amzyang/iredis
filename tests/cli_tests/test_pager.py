@@ -1,11 +1,11 @@
 # noqa: F541
-from contextlib import contextmanager
 import os
 import pathlib
+from contextlib import contextmanager
 from textwrap import dedent
-from packaging.version import parse as version_parse
 
 import pexpect
+from packaging.version import parse as version_parse
 
 TEST_IREDISRC = "/tmp/.iredisrc.test"
 TEST_PAGER_BOUNDARY = "---boundary---"

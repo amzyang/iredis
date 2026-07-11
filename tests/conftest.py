@@ -9,9 +9,10 @@ import redis
 
 from iredis.client import Client
 from iredis.commands import split_command_args
-from iredis.redis_grammar import get_command_grammar
+from iredis.config import Config
+from iredis.config import config as global_config
 from iredis.exceptions import InvalidArguments
-from iredis.config import Config, config as global_config
+from iredis.redis_grammar import get_command_grammar
 
 TIMEOUT = 5
 HISTORY_FILE = ".iredis_history"

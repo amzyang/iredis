@@ -1,31 +1,30 @@
-import os
 import logging
+import os
+import platform
 import sys
 import time
 from pathlib import Path
-import platform
 
 import click
-from prompt_toolkit import PromptSession
-from prompt_toolkit.cursor_shapes import ModalCursorShapeConfig
-from prompt_toolkit.history import FileHistory
+from prompt_toolkit import PromptSession, print_formatted_text
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
-from prompt_toolkit import print_formatted_text
+from prompt_toolkit.cursor_shapes import ModalCursorShapeConfig
 from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding.bindings.named_commands import (
     register as prompt_register,
 )
 
-from .client import Client
-from .key_bindings import kb as key_bindings
-from .style import THEMES, get_style
-from .config import config, load_config_files
-from .processors import UserInputCommand, UpdateBottomProcessor, PasswordProcessor
-from .bottom import BottomToolbar
-from .utils import timer, exit, convert_formatted_text_to_bytes, parse_url
-from .completers import IRedisCompleter
-from .lexer import IRedisLexer
 from . import __version__
+from .bottom import BottomToolbar
+from .client import Client
+from .completers import IRedisCompleter
+from .config import config, load_config_files
+from .key_bindings import kb as key_bindings
+from .lexer import IRedisLexer
+from .processors import PasswordProcessor, UpdateBottomProcessor, UserInputCommand
+from .style import THEMES, get_style
+from .utils import convert_formatted_text_to_bytes, exit, parse_url, timer
 
 logger = logging.getLogger(__name__)
 
@@ -419,7 +418,7 @@ def edit_and_execute(event):
 
 def resolve_dsn(dsn):
     try:
-        dsn_uri = config.alias_dsn[dsn]
+        dsn_uri = config.alias_dsn[dsn]  # ty: ignore[not-subscriptable]
     except KeyError:
         click.secho(
             "Could not find the specified DSN in the config file. "
@@ -529,7 +528,9 @@ def main():
 
     # prompt session
     session = PromptSession(
-        history=SkipAuthFileHistory(Path(os.path.expanduser(config.history_location))),
+        history=SkipAuthFileHistory(
+            Path(os.path.expanduser(config.history_location))  # ty: ignore[no-matching-overload]
+        ),
         style=get_style(config.theme),
         auto_suggest=AutoSuggestFromHistory(),
         complete_while_typing=True,

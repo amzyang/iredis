@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import sys
 import fileinput
+import sys
 
 
 def wrappager(boundary):

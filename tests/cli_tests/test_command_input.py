@@ -1,8 +1,8 @@
 import os
 import time
 
-from packaging.version import parse as version_parse
 import pytest
+from packaging.version import parse as version_parse
 
 
 def test_wrong_select_db_index(cli):

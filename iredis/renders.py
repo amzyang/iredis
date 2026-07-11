@@ -7,8 +7,8 @@ func(redis-response) -> formatted result(str)
 
 import logging
 import time
-from packaging.version import parse as version_parse
 
+from packaging.version import parse as version_parse
 from prompt_toolkit.formatted_text import FormattedText
 
 from .commands import command2callback
@@ -218,7 +218,7 @@ class OutputRender:
         score_width = max(len(score) for score in scores)
         rendered = []
         for index, item in enumerate(double_quoted):
-            index_const_width = f"{index+1:{index_width}})"
+            index_const_width = f"{index + 1:{index_width}})"
             rendered.append(("", index_const_width))
             # add a space between index and member
             rendered.append(("", " "))
@@ -249,7 +249,7 @@ class OutputRender:
         fields_quoted = double_quotes(fields)
         rendered = []
         for index, item in enumerate(fields_quoted):
-            index_const_width = f"{index+1:{index_width}})"
+            index_const_width = f"{index + 1:{index_width}})"
             rendered.append(("", index_const_width))
             rendered.append(("", " "))
             rendered.append(("class:field", item))
@@ -276,7 +276,7 @@ class OutputRender:
         text = ensure_str(raw)
         index_width = len(str(len(text)))
         for index, slowlog in enumerate(text):
-            index_str = f"{index+1:{index_width}}) "
+            index_str = f"{index + 1:{index_width}}) "
             rendered.append(("", index_str))
             for field, value in zip(fields, slowlog):
                 if field == "Command":
@@ -386,7 +386,7 @@ def _render_list(byte_items, str_items, style=None, pre_space=0):
         if indent_spaces:
             rendered.append(("", indent_spaces))  # add a space before item
 
-        index_const_width = f"{index+1:{index_width}})"
+        index_const_width = f"{index + 1:{index_width}})"
         rendered.append(("", index_const_width))
         # list item
         rendered.append(("", " "))  # add a space before item
@@ -424,7 +424,7 @@ def _render_pair(pairs, indent):
     for key, value in zip(keys, values):
         key = ensure_str(key, decode="utf-8")
         value = ensure_str(value, decode="utf-8")
-        rendered.append(("class:string", f"{' '*4*indent}{key}: "))
+        rendered.append(("class:string", f"{' ' * 4 * indent}{key}: "))
         if isinstance(value, list):
             rendered.append(NEWLINE_TUPLE)
             rendered.extend(_render_pair(value, indent + 1))

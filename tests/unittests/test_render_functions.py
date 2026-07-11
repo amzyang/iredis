@@ -1,9 +1,11 @@
 import os
 import time
+
 from prompt_toolkit.formatted_text import FormattedText
+
 from iredis import renders
-from iredis.config import config
 from iredis.completers import IRedisCompleter
+from iredis.config import config
 
 
 def strip_formatted_text(formatted_text):

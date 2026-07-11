@@ -1,5 +1,5 @@
-import pytest
 import pexpect
+import pytest
 
 
 def test_trasaction_rprompt(clean_redis, cli):

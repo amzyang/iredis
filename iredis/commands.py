@@ -1,13 +1,13 @@
-import re
 import csv
+import functools
 import json
 import logging
-import functools
+import re
 from importlib.resources import files
 
-from .utils import timer, strip_quote_args
-from .exceptions import InvalidArguments, AmbiguousCommand
 from . import data as project_data
+from .exceptions import AmbiguousCommand, InvalidArguments
+from .utils import strip_quote_args, timer
 
 logger = logging.getLogger(__name__)
 

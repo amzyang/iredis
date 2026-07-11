@@ -1,19 +1,20 @@
 import re
 import time
-import pytest
 from unittest.mock import patch
 
-from iredis.utils import timer, strip_quote_args
-from iredis.commands import split_command_args, split_unknown_args
+import pytest
+from prompt_toolkit import print_formatted_text
+
+from iredis.commands import commands_summary, split_command_args, split_unknown_args
+from iredis.exceptions import AmbiguousCommand, InvalidArguments
+from iredis.style import STYLE
 from iredis.utils import (
     command_syntax,
-    parse_argument_to_formatted_text,
     compose_command_syntax,
+    parse_argument_to_formatted_text,
+    strip_quote_args,
+    timer,
 )
-from iredis.style import STYLE
-from iredis.exceptions import InvalidArguments, AmbiguousCommand
-from iredis.commands import commands_summary
-from prompt_toolkit import print_formatted_text
 
 
 def test_timer():
