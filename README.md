@@ -147,6 +147,32 @@ directly. After v1.15.2, as the PyOxidizer [is no longer maintained](
 https://gregoryszorc.com/blog/2024/03/17/my-shifting-open-source-priorities/),
 IRedis doesn't do the single binary build either.
 
+### Shell Completion
+
+IRedis supports shell completion for its command line options (powered by
+click). If you installed IRedis via brew, completions for bash/zsh/fish are
+installed automatically, no setup needed.
+
+For pip/pipx installations, enable it manually.
+
+Bash: add this to `~/.bashrc`:
+
+```shell
+eval "$(_IREDIS_COMPLETE=bash_source iredis)"
+```
+
+Zsh: add this to `~/.zshrc`:
+
+```shell
+eval "$(_IREDIS_COMPLETE=zsh_source iredis)"
+```
+
+Fish: save the completion script to fish's completion directory:
+
+```shell
+_IREDIS_COMPLETE=fish_source iredis > ~/.config/fish/completions/iredis.fish
+```
+
 ## Usage
 
 Once you install IRedis, you will know how to use it. Just remember, IRedis
