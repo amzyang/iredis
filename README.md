@@ -79,7 +79,10 @@ like `KEYS *` (see
   config file.
 - Theme support via `--theme` option or `theme` in `~/.iredisrc`: the `default`
   theme only uses your terminal's ANSI colors so IRedis looks consistent with
-  your terminal color scheme; use `classic` for the original IRedis colors.
+  your terminal color scheme; use `classic` for the original IRedis colors, or
+  one of the four built-in [Catppuccin](https://catppuccin.com) flavors:
+  `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`,
+  `catppuccin-mocha`.
 - Hide password for `AUTH` command.
 - Says "Goodbye!" to you when you exit!
 - For full features, please see: [iredis.xbin.io](https://www.iredis.xbin.io)
@@ -204,11 +207,16 @@ Options:
                                   STDOUT is not a tty.
 
   --rainbow / --no-rainbow        Display colorful prompt.
-  --theme [classic|default]       Color theme. "default" only uses your
+  --theme [catppuccin-frappe|catppuccin-latte|catppuccin-macchiato|catppuccin-mocha|classic|default]
+                                  Color theme. "default" only uses your
                                   terminal's ANSI colors, so iredis looks
                                   consistent with your terminal color scheme;
                                   "classic" is the original iredis color
-                                  scheme with hardcoded colors.
+                                  scheme with hardcoded colors. The
+                                  "catppuccin-*" themes use the official
+                                  Catppuccin palette (https://catppuccin.com):
+                                  latte is the light flavor; frappe, macchiato
+                                  and mocha are progressively darker.
 
   --shell / --no-shell            Allow to run shell commands, default to
                                   True.

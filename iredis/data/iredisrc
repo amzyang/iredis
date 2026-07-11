@@ -23,6 +23,10 @@ rainbow = False
 #            dark and light backgrounds)
 #   classic: the original iredis color scheme, hardcoded 24-bit colors,
 #            looks the same on every terminal
+#   catppuccin-latte / catppuccin-frappe / catppuccin-macchiato /
+#   catppuccin-mocha: the official Catppuccin palette
+#            (https://catppuccin.com), latte is light, the other three
+#            are dark, from lighter to darker
 theme = default
 
 # retry times for connection error and timeout

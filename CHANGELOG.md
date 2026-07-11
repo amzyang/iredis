@@ -1,3 +1,9 @@
+## Unreleased
+
+- Feature: four built-in [Catppuccin](https://catppuccin.com) themes:
+  `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato` and
+  `catppuccin-mocha`, generated from the official palette.
+
 ## 2.1.1
 
 - Bugfix: `iredis --version` reported 1.16.1 in the 2.x releases because the

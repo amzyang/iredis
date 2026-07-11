@@ -238,7 +238,9 @@ SHELL = """Allow to run shell commands, default to True."""
 THEME_HELP = """
 Color theme. "default" only uses your terminal's ANSI colors, so iredis \
 looks consistent with your terminal color scheme; "classic" is the original \
-iredis color scheme with hardcoded colors.
+iredis color scheme with hardcoded colors. The "catppuccin-*" themes use the \
+official Catppuccin palette (https://catppuccin.com): latte is the light \
+flavor; frappe, macchiato and mocha are progressively darker.
 """
 PAGER_HELP = """Using pager when output is too tall for your window, default to True."""
 VERIFY_SSL_HELP = """Set the TLS certificate verification strategy"""
