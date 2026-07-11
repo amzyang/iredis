@@ -384,35 +384,44 @@ patch release, whereas big features will get a minor release.
 
 ### Setup Environment
 
-IRedis favors [poetry](https://github.com/sdispater/poetry) as package
-management tool. To setup a develop environment on your computer:
+IRedis uses [uv](https://github.com/astral-sh/uv) as package management tool.
+To setup a develop environment on your computer:
 
-First, install poetry (you can do it in a python's virtualenv):
-
-```
-pip install poetry
-```
-
-Then run (which is similar to `pip install -e .`):
+First, [install uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```
-poetry install
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+Then run (which creates a virtualenv and installs all dependencies, including
+dev tools):
+
+```
+uv sync
+```
+
+You can run iredis from source with `uv run iredis`, and the test suite with
+`uv run pytest`.
 
 **Be careful running testcases locally, it may flush you db!!!**
 
 ### Code style
 
-Code is formatted with [black](https://github.com/psf/black). After modifying code, run:
+Code is formatted and linted with [ruff](https://github.com/astral-sh/ruff),
+and type-checked with [ty](https://github.com/astral-sh/ty). After modifying
+code, run:
 
 ```bash
-black .
+uv run ruff format .
+uv run ruff check . --fix
+uv run ty check
 ```
 
-We recommend installing [pre-commit](https://pre-commit.com/) so black and flake8 run automatically on each `git commit`:
+We recommend installing [pre-commit](https://pre-commit.com/) so ruff runs
+automatically on each `git commit`:
 
 ```bash
-poetry run pre-commit install
+uv run pre-commit install
 ```
 
 ### Development Logs
