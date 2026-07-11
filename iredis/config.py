@@ -49,6 +49,10 @@ class Config:
         self.completion_casing = None
         self.alias_dsn = None
         self.natmap = {}
+        # named key-pattern groups for the PATTERN command, name -> glob
+        self.patterns = {}
+        # path of the user's iredisrc, PATTERN ADD/RM write back to it
+        self.iredisrc = None
 
         # ===bad code===
         # below are not configs, it's global state, it's wrong to write this
@@ -135,5 +139,24 @@ def load_config_files(iredisrc):
     config.prompt = config_obj["main"].get("prompt")
     config.greetings = config_obj["main"].as_bool("greetings")
     config.theme = config_obj["main"].get("theme")
+    config.iredisrc = os.path.expanduser(iredisrc)
+    config.patterns = dict(config_obj.get("patterns", {}))
 
     return config_obj
+
+
+def save_patterns(patterns):
+    """
+    Persist pattern groups to the [patterns] section of the user's iredisrc.
+
+    Other sections of the file are left untouched. The file is created if it
+    doesn't exist yet.
+    """
+    iredisrc = os.path.expanduser(config.iredisrc or "~/.iredisrc")
+    try:
+        user_config = ConfigObj(iredisrc, interpolation=False, encoding="utf8")
+    except ConfigObjError as e:
+        raise Exception(f"Unable to parse config file '{iredisrc}': {e}")
+    user_config["patterns"] = patterns
+    user_config.write()
+    return iredisrc

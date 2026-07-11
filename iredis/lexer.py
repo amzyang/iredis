@@ -56,6 +56,7 @@ def get_lexer_mapping():
         "position": SimpleLexer("class:integer"),
         "cursor": SimpleLexer("class:integer"),
         "pattern": SimpleLexer("class:pattern"),
+        "pattern_name": SimpleLexer("class:group"),
         "type": SimpleLexer("class:string"),
         "fields": SimpleLexer("class:field"),
         "field": SimpleLexer("class:field"),

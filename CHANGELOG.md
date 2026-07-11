@@ -4,6 +4,17 @@
   new `default` theme only uses the terminal's ANSI colors, so iredis's style stays
   consistent with the terminal color scheme; the original hardcoded color scheme is
   kept as the `classic` theme.
+- Feature: new `PATTERN` command to manage named key-pattern groups and browse
+  matching keys. `PATTERN ADD <group> <pattern>` saves a group to `iredisrc`
+  (`[patterns]` section), `PATTERN <group>` scans a batch of matching keys with
+  their types, run it again to continue scanning from the last cursor;
+  `PATTERN` lists groups and `PATTERN RM <group>` deletes one. Scanned keys
+  feed key completion for the following commands.
+- Feature: `PATTERN BROWSE <group>` opens an interactive dual-pane key browser
+  on the terminal's alternate screen (REPL scrollback untouched): Up/Down moves
+  the selection, the right pane peeks the selected key, Space scans more keys,
+  Tab toggles the detail pane, `dd` deletes the selected key, Enter exits and
+  peeks the picked key in the REPL.
 - Bugfix: the bottom bar syntax do not show `token` like `MATCH`, `COUNT`, `TYPE`.
 - Bugfix: replace the `open_text` API with `files()`.
 - Dependency: Add support for Python 3.13, drop support for Python 3.8 and 3.9.

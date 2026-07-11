@@ -194,6 +194,7 @@ GROUP = rf"(?P<group>{VALID_TOKEN})"
 CONSUMER = rf"(?P<consumer>{VALID_TOKEN})"
 CATEGORYNAME = rf"(?P<categoryname>{VALID_TOKEN})"
 USERNAME = rf"(?P<username>{VALID_TOKEN})"
+PATTERN_NAME = rf"(?P<pattern_name>{VALID_TOKEN})"
 RULE = rf"(?P<rule>{VALID_TOKEN})"
 BIT = r"(?P<bit>0|1)"
 FLOAT = rf"(?P<float>{_FLOAT})"
@@ -377,6 +378,9 @@ command_grammar = compile(COMMAND)
 GRAMMAR = {
     "command_key": rf"\s+ {KEY} \s*",
     "command_pattern": rf"\s+ {PATTERN} \s*",
+    "command_patternnamex_cursorx": rf"(\s+ {PATTERN_NAME} (\s+ {CURSOR})?)? \s*",
+    "command_patternname_pattern": rf"\s+ {PATTERN_NAME} \s+ {PATTERN} \s*",
+    "command_patternname": rf"\s+ {PATTERN_NAME} \s*",
     "command_command": rf"\s+ {COMMAND} \s*",
     "command_slots": rf"\s+ {SLOTS} \s*",
     "command_node": rf"\s+ {NODE} \s*",
