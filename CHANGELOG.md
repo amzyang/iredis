@@ -3,6 +3,14 @@
 - Feature: vi keybindings for editing the input, like `set -o vi` in bash.
   Enable with `--vi` or `vi_mode = True` in `iredisrc`. The cursor shape
   follows the current vi mode: beam for insert mode, block for normal mode.
+- Internal: build and dev tooling migrated from poetry/black/flake8 to
+  [uv](https://github.com/astral-sh/uv), [ruff](https://github.com/astral-sh/ruff)
+  and [ty](https://github.com/astral-sh/ty). CI runs pytest again (it had
+  silently stopped), plus ruff and ty checks; a `justfile` wraps common
+  development commands.
+- Bugfix: compatible with redis-py 8.x. iredis now explicitly requests RESP2
+  when connecting, because redis-py 8 defaults to RESP3, which iredis does not
+  speak yet.
 - Feature: four built-in [Catppuccin](https://catppuccin.com) themes:
   `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato` and
   `catppuccin-mocha`, generated from the official palette.
