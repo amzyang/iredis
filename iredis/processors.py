@@ -6,8 +6,8 @@ from prompt_toolkit.layout.processors import (
     TransformationInput,
 )
 
-from .exceptions import InvalidArguments, AmbiguousCommand
 from .commands import split_command_args
+from .exceptions import AmbiguousCommand, InvalidArguments
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +59,11 @@ class PasswordProcessor(Processor):
     def __init__(self, char: str = "*") -> None:
         self.char = char
 
-    def apply_transformation(self, ti: TransformationInput) -> Transformation:
-        input_text = ti.document.text
-        default_transformation = Transformation(ti.fragments)
+    def apply_transformation(
+        self, transformation_input: TransformationInput
+    ) -> Transformation:
+        input_text = transformation_input.document.text
+        default_transformation = Transformation(transformation_input.fragments)
         try:
             command, _ = split_command_args(input_text)
         except (InvalidArguments, AmbiguousCommand):
@@ -71,9 +73,9 @@ class PasswordProcessor(Processor):
             return default_transformation
 
         fragments = []
-        for style, text, *handler in ti.fragments:
+        for style, text, *handler in transformation_input.fragments:
             if style == "class:password":
                 fragments.append((style, self.char * len(text), *handler))
             else:
                 fragments.append((style, text, *handler))
-        return Transformation(fragments)
+        return Transformation(fragments)  # ty: ignore[invalid-argument-type]

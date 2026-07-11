@@ -1,7 +1,7 @@
+import logging
 import re
 import sys
 import time
-import logging
 from collections import namedtuple
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -332,7 +332,7 @@ def parse_url(url, db=0):
     else:
         valid_schemes = ", ".join(("redis://", "rediss://", "unix://"))
         raise ValueError(
-            "Redis URL must specify one of the following" "schemes (%s)" % valid_schemes
+            f"Redis URL must specify one of the followingschemes ({valid_schemes})"
         )
 
     username = unquote(url.username) if url.username else None

@@ -1,5 +1,5 @@
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 from datetime import datetime, timezone
 
 from dateutil.relativedelta import relativedelta
@@ -13,11 +13,11 @@ from prompt_toolkit.completion import (
 from prompt_toolkit.contrib.regular_languages.completion import GrammarCompleter
 from prompt_toolkit.document import Document
 
-from .commands import split_command_args, commands_summary, all_commands
+from .commands import all_commands, commands_summary, split_command_args
 from .config import config
-from .exceptions import InvalidArguments, AmbiguousCommand
+from .exceptions import AmbiguousCommand, InvalidArguments
 from .redis_grammar import CONST, command_grammar, get_command_grammar
-from .utils import strip_quote_args, ensure_str
+from .utils import ensure_str, strip_quote_args
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class MostRecentlyUsedFirstWordMixin:
     def __init__(self, max_words, words, *args, **kwargs):
         self.words = words
         self.max_words = max_words
-        super().__init__(words, *args, **kwargs)
+        super().__init__(words, *args, **kwargs)  # ty: ignore[too-many-positional-arguments]
 
     def touch(self, word):
         """
@@ -311,10 +311,7 @@ class IRedisCompleter(Completer):
         self.key_completer.touch_words(ensure_str(items))
 
     def __repr__(self) -> str:
-        return "DynamicCompleter({!r} -> {!r})".format(
-            self.get_completer,
-            self.current_completer,
-        )
+        return f"DynamicCompleter({self.get_completer!r} -> {self.current_completer!r})"
 
     def get_completer_mapping(self, hint_on, completion_casing):
         completer_mapping = {}
@@ -400,7 +397,7 @@ class IRedisCompleter(Completer):
             "auto": auto_commands,
             "upper": upper_commands,
             "lower": lower_commands,
-        }.get(completion_casing)
+        }[completion_casing]
 
         completer_mapping["command"] = WordCompleter(
             command_completions, ignore_case=ignore_case, sentence=True, meta_dict=hint

@@ -1,5 +1,7 @@
 import sys
+
 import click
+
 from .commands import dangerous_commands
 
 
@@ -14,7 +16,7 @@ class ConfirmBoolParamType(click.ParamType):
             return True
         elif value in ("no", "n"):
             return False
-        self.fail("%s is not a valid boolean" % value, param, ctx)
+        self.fail(f"{value} is not a valid boolean", param, ctx)
 
     def __repr__(self):
         return "BOOL"
@@ -50,6 +52,6 @@ def confirm_dangerous_command(upper_command):
 
     """
     dangerous, reason = is_dangerous(upper_command)
-    prompt_text = f"{reason}.\n" "Do you want to proceed? (y/n)"
+    prompt_text = f"{reason}.\nDo you want to proceed? (y/n)"
     if dangerous and sys.stdin.isatty():
         return prompt(prompt_text, type=BOOLEAN_TYPE)

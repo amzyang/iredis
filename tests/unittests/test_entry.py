@@ -1,17 +1,17 @@
-import pytest
 import tempfile
 from unittest.mock import patch
+
+import pytest
 from prompt_toolkit.formatted_text import FormattedText
 
 from iredis.entry import (
+    SkipAuthFileHistory,
     gather_args,
     greetings,
-    parse_url,
-    SkipAuthFileHistory,
-    write_result,
     is_too_tall,
+    parse_url,
+    write_result,
 )
-
 from iredis.utils import DSN
 
 
@@ -73,8 +73,9 @@ def test_command_with_shell_pipeline():
 
 
 def test_command_shell_options_higher_priority():
-    from iredis.config import config
     from textwrap import dedent
+
+    from iredis.config import config
 
     config_content = dedent(
         """
@@ -105,8 +106,9 @@ def test_command_with_theme():
 
 
 def test_command_theme_options_higher_priority():
-    from iredis.config import config
     from textwrap import dedent
+
+    from iredis.config import config
 
     config_content = dedent(
         """

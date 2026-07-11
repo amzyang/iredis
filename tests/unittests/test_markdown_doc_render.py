@@ -5,8 +5,9 @@ see:
 https://github.com/antirez/redis-doc/commit/02b3d1a345093c1794fd86273e9d516fffd3b819
 """
 
-import pytest
 from importlib.resources import files
+
+import pytest
 
 from iredis.commands import commands_summary
 from iredis.data import commands as commands_data

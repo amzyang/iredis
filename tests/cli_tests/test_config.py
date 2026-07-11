@@ -1,6 +1,7 @@
-import pexpect
-from textwrap import dedent
 from pathlib import Path
+from textwrap import dedent
+
+import pexpect
 
 
 def test_log_location_config():

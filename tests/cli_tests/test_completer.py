@@ -1,6 +1,7 @@
-from packaging.version import parse as version_parse  # noqa: F401
-import pytest
 import time
+
+import pytest
+from packaging.version import parse as version_parse  # noqa: F401
 
 
 def test_integer_type_completer(cli):

@@ -1,7 +1,8 @@
 import os
-import pexpect
 from pathlib import Path
 from textwrap import dedent
+
+import pexpect
 
 
 def test_history_not_log_auth(cli):

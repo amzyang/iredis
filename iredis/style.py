@@ -1,5 +1,5 @@
 import logging
-from functools import lru_cache
+from functools import cache
 
 from prompt_toolkit.styles import Style, merge_styles
 
@@ -362,7 +362,7 @@ THEMES = {
 }
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_style(theme_name=None):
     """Return the prompt_toolkit Style of the given theme.
 

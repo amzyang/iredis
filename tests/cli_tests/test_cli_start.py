@@ -1,8 +1,8 @@
 from textwrap import dedent
 
-from packaging.version import parse as version_parse  # noqa: F401
 import pexpect
 import pytest
+from packaging.version import parse as version_parse  # noqa: F401
 
 
 def test_start_on_connection_error():

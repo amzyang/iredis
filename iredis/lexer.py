@@ -1,4 +1,4 @@
-from typing import Callable, Hashable
+from collections.abc import Callable, Hashable
 
 from prompt_toolkit.contrib.regular_languages.lexer import GrammarLexer
 from prompt_toolkit.document import Document
@@ -7,7 +7,7 @@ from prompt_toolkit.lexers import Lexer, PygmentsLexer, SimpleLexer
 from pygments.lexers.scripting import LuaLexer
 
 from .commands import split_command_args
-from .exceptions import InvalidArguments, AmbiguousCommand
+from .exceptions import AmbiguousCommand, InvalidArguments
 from .redis_grammar import CONST, get_command_grammar
 
 
@@ -98,5 +98,5 @@ class IRedisLexer(Lexer):
         return self._current_lexer.lex_document(document)
 
     def invalidation_hash(self) -> Hashable:
-        lexer = self.get_lexer() or self._dummy
+        lexer = self._current_lexer or self._dummy
         return id(lexer)

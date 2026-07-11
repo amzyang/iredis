@@ -1,8 +1,9 @@
-from importlib.resources import as_file, files
-import os
 import logging
+import os
+from importlib.resources import as_file, files
 
 from configobj import ConfigObj, ConfigObjError
+
 from . import data as project_data
 
 # TODO verbose logger to print to stdout
@@ -99,15 +100,11 @@ def read_config_file(f):
     try:
         config = ConfigObj(f, interpolation=False, encoding="utf8")
     except ConfigObjError as e:
-        logger.error(
-            "Unable to parse line {} of config file " "'{}'.".format(e.line_number, f)
-        )
+        logger.error(f"Unable to parse line {e.line_number} of config file '{f}'.")
         logger.error("Using successfully parsed config values.")
-        return e.config
+        return e.config  # ty: ignore[unresolved-attribute]
     except OSError as e:
-        logger.error(
-            "You don't have permission to read " "config file '{}'.".format(e.filename)
-        )
+        logger.error(f"You don't have permission to read config file '{e.filename}'.")
         return None
 
     return config

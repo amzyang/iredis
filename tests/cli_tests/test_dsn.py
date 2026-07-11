@@ -1,7 +1,7 @@
 import os
+from textwrap import dedent
 
 import pexpect
-from textwrap import dedent
 import pytest
 
 
