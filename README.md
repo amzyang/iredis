@@ -78,7 +78,7 @@ like `KEYS *` (see
 - <kbd>Ctrl</kbd> + <kbd>R</kbd> to open **reverse-i-search** to search through
   your command history.
 - Auto suggestions. (Like [fish shell](http://fishshell.com/).)
-- Support `--encode=utf-8`, to decode Redis' bytes responses.
+- Support `--decode=utf-8`, to decode Redis' bytes responses.
 - Command hint on bottom, include command syntax, supported redis version, and
   time complexity.
 - Official docs with built-in `HELP` command, try `HELP SET`!
@@ -211,46 +211,44 @@ Usage: iredis [OPTIONS] [CMD]...
   settings.
 
 Options:
-  -h TEXT                         Server hostname (default: 127.0.0.1).
-  -p TEXT                         Server port (default: 6379).
-  -s, --socket TEXT               Server socket (overrides hostname and port).
+  -h TEXT                         Server hostname (default: 127.0.0.1, can set
+                                  with env `IREDIS_HOST`).
+  -p TEXT                         Server port (default: 6379, can set with env
+                                  `IREDIS_PORT`).
+  -s, --socket PATH               Server socket (overrides hostname and port).
   -n INTEGER                      Database number.(overwrites dsn/url's db
                                   number)
-
   -u, --username TEXT             User name used to auth, will be ignore for
                                   redis version < 6.
-
   -a, --password TEXT             Password to use when connecting to the
-                                  server.
-
+                                  server (can set with env `IREDIS_PASSWORD`,
+                                  recommended for sensitive values).
   --url TEXT                      Use Redis URL to indicate connection(Can set
                                   with env `IREDIS_URL`), Example:     redis:/
                                   /[[username]:[password]]@localhost:6379/0
                                   rediss://[[username]:[password]]@localhost:6
                                   379/0     unix://[[username]:[password]]@/pa
                                   th/to/socket.sock?db=0
-
   -d, --dsn TEXT                  Use DSN configured into the [alias_dsn]
                                   section of iredisrc file. (Can set with env
                                   `IREDIS_DSN`)
-
   --newbie / --no-newbie          Show command hints and useful helps.
-  --iredisrc TEXT                 Config file for iredis, default is
-                                  ~/.iredisrc.
-
+  --iredisrc PATH                 Config file for iredis, default is
+                                  ~/.iredisrc. You can also set config path
+                                  via environment variable `IREDIS_CONFIG`.
   --decode TEXT                   decode response, default is No decode, which
-                                  will output all bytes literals.
-
-  --client_name TEXT              Assign a name to the current connection.
+                                  will output all bytes literals. Accepts any
+                                  Python codec name or alias (e.g. utf-8, gbk,
+                                  latin-1).
+  --client-name, --client_name TEXT
+                                  Assign a name to the current connection.
   --raw / --no-raw                Use raw formatting for replies (default when
                                   STDOUT is not a tty). However, you can use
                                   --no-raw to force formatted output even when
                                   STDOUT is not a tty.
-
   --rainbow / --no-rainbow        Display colorful prompt.
   --vi / --no-vi                  Use vi keybindings to edit the input, like
                                   `set -o vi` in bash.
-
   --theme [catppuccin-frappe|catppuccin-latte|catppuccin-macchiato|catppuccin-mocha|classic|default]
                                   Color theme. "default" only uses your
                                   terminal's ANSI colors, so iredis looks
@@ -261,24 +259,27 @@ Options:
                                   Catppuccin palette (https://catppuccin.com):
                                   latte is the light flavor; frappe, macchiato
                                   and mocha are progressively darker.
-
   --shell / --no-shell            Allow to run shell commands, default to
                                   True.
-
   --pager / --no-pager            Using pager when output is too tall for your
                                   window, default to True.
-
+  --greetings / --no-greetings    Enable or disable greeting messages
+  --sentry / --no-sentry          Enable or disable crash report via Sentry
+                                  for this run (overrides the `sentry` option
+                                  in iredisrc).
   --verify-ssl [none|optional|required]
                                   Set the TLS certificate verification
                                   strategy
-
   --prompt TEXT                   Prompt format (supported interpolations:
                                   {client_name}, {db}, {host}, {path}, {port},
                                   {username}, {client_addr}, {client_id}).
-
+  --natmap REMOTE_HOST:REMOTE_PORT:LOCAL_HOST:LOCAL_PORT[,...]
+                                  NAT map for Redis cluster behind SSH
+                                  tunnels. Format:
+                                  remoteHost:remotePort:localHost:localPort
+                                  (comma-separated for multiple nodes).
   --version                       Show the version and exit.
   --help                          Show this message and exit.
-
 ```
 
 ### Using DSN

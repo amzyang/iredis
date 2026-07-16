@@ -595,6 +595,47 @@ def test_verify_ssl_loaded_from_config_file(config, tmp_path):
     assert config.verify_ssl == "required"
 
 
+def test_rainbow_flag_overrides_config(config):
+    gather_args.main(["iredis", "--rainbow"], standalone_mode=False)
+    assert config.rainbow is True
+
+    gather_args.main(["iredis", "--no-rainbow"], standalone_mode=False)
+    assert config.rainbow is False
+
+    gather_args.main(["iredis"], standalone_mode=False)
+    assert config.rainbow is False
+
+
+def test_newbie_flag_overrides_config(config):
+    gather_args.main(["iredis", "--newbie"], standalone_mode=False)
+    assert config.newbie_mode is True
+
+    gather_args.main(["iredis", "--no-newbie"], standalone_mode=False)
+    assert config.newbie_mode is False
+
+    gather_args.main(["iredis"], standalone_mode=False)
+    assert config.newbie_mode is False
+
+
+def test_greetings_flag_overrides_config(config):
+    gather_args.main(["iredis", "--no-greetings"], standalone_mode=False)
+    assert config.greetings is False
+
+    gather_args.main(["iredis", "--greetings"], standalone_mode=False)
+    assert config.greetings is True
+
+    gather_args.main(["iredis"], standalone_mode=False)
+    assert config.greetings is True
+
+
+def test_verify_ssl_flag_sets_config(config):
+    gather_args.main(["iredis", "--verify-ssl", "optional"], standalone_mode=False)
+    assert config.verify_ssl == "optional"
+
+    gather_args.main(["iredis"], standalone_mode=False)
+    assert config.verify_ssl is None
+
+
 @pytest.mark.parametrize("spelling", ["--client-name", "--client_name"])
 def test_client_name_accepts_both_spellings(config, spelling):
     ctx = gather_args.main(["iredis", spelling, "myapp"], standalone_mode=False)
