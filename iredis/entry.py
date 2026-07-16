@@ -225,8 +225,7 @@ def repl(client, session, start_time):
         # Error with previous command or exception
         except Exception as e:
             logger.exception(e)
-            # TODO red error color
-            print("(error)", str(e))
+            click.secho(f"(error) {e}", fg="red")
 
 
 RAW_HELP = """
@@ -334,8 +333,18 @@ def complete_dsn(ctx, param, incomplete):
 # command line entry here...
 @click.command()
 @click.pass_context
-@click.option("-h", help="Server hostname (default: 127.0.0.1).", default="127.0.0.1")
-@click.option("-p", help="Server port (default: 6379).", default="6379")
+@click.option(
+    "-h",
+    help="Server hostname (default: 127.0.0.1, can set with env `IREDIS_HOST`).",
+    default="127.0.0.1",
+    envvar="IREDIS_HOST",
+)
+@click.option(
+    "-p",
+    help="Server port (default: 6379, can set with env `IREDIS_PORT`).",
+    default="6379",
+    envvar="IREDIS_PORT",
+)
 @click.option(
     "-s",
     "--socket",
@@ -354,7 +363,16 @@ def complete_dsn(ctx, param, incomplete):
     "--username",
     help="User name used to auth, will be ignore for redis version < 6.",
 )
-@click.option("-a", "--password", help="Password to use when connecting to the server.")
+@click.option(
+    "-a",
+    "--password",
+    envvar="IREDIS_PASSWORD",
+    help=(
+        "Password to use when connecting to the server "
+        "(can set with env `IREDIS_PASSWORD`, recommended for "
+        "sensitive values)."
+    ),
+)
 @click.option(
     "--url", default=None, envvar="IREDIS_URL", callback=validate_url, help=URL_HELP
 )
@@ -389,7 +407,12 @@ def complete_dsn(ctx, param, incomplete):
     shell_complete=complete_decode,
     help=DECODE_HELP,
 )
-@click.option("--client_name", help="Assign a name to the current connection.")
+@click.option(
+    "--client-name",
+    "--client_name",
+    "client_name",
+    help="Assign a name to the current connection.",
+)
 @click.option("--raw/--no-raw", default=None, is_flag=True, help=RAW_HELP)
 @click.option("--rainbow/--no-rainbow", default=None, is_flag=True, help=RAINBOW)
 @click.option("--vi/--no-vi", default=None, is_flag=True, help=VI_HELP)
@@ -403,6 +426,15 @@ def complete_dsn(ctx, param, incomplete):
     default=None,
     is_flag=True,
     help="Enable or disable greeting messages",
+)
+@click.option(
+    "--sentry/--no-sentry",
+    default=None,
+    is_flag=True,
+    help=(
+        "Enable or disable crash report via Sentry for this run "
+        "(overrides the `sentry` option in iredisrc)."
+    ),
 )
 @click.option(
     "--verify-ssl",
@@ -453,6 +485,7 @@ def gather_args(
     shell,
     pager,
     greetings,
+    sentry,
     verify_ssl,
     prompt,
     natmap,
@@ -505,6 +538,8 @@ def gather_args(
         config.verify_ssl = verify_ssl
     if greetings is not None:
         config.greetings = greetings
+    if sentry is not None:
+        config.sentry = sentry
 
     if natmap:
         config.natmap = natmap

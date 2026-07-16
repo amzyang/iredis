@@ -57,7 +57,16 @@ def test_send_command_renders_utf8_error_message(config):
     )
     resp = next(client.send_command("get foo"))
     assert resp == FormattedText(
-        [("class:type", "(error) "), ("class:error", "ERROR 没有查询权限")]
+        [("class:type", "(error) "), ("class:error", "没有查询权限")]
+    )
+
+
+def test_send_command_internal_error_keeps_exception_type(config):
+    client = Client("127.0.0.1", 6379, None)
+    client.execute = MagicMock(side_effect=TypeError("boom"))
+    resp = next(client.send_command("get foo"))
+    assert resp == FormattedText(
+        [("class:type", "(error) "), ("class:error", "TypeError: boom")]
     )
 
 
@@ -256,7 +265,7 @@ def test_auto_select_db_and_auth_for_reconnect_only_6(iredis_client, config):
     resp = next(iredis_client.send_command("auth 123"))
 
     assert (
-        b"ERROR AUTH <password> called without any "
+        b"AUTH <password> called without any "
         b"password configured for the default user. "
         b"Are you sure your configuration is correct?" in resp
     )

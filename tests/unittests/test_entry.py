@@ -595,6 +595,29 @@ def test_verify_ssl_loaded_from_config_file(config, tmp_path):
     assert config.verify_ssl == "required"
 
 
+@pytest.mark.parametrize("spelling", ["--client-name", "--client_name"])
+def test_client_name_accepts_both_spellings(config, spelling):
+    ctx = gather_args.main(["iredis", spelling, "myapp"], standalone_mode=False)
+    assert ctx.params["client_name"] == "myapp"
+
+
+def test_password_read_from_environment_variable(monkeypatch, config):
+    monkeypatch.setenv("IREDIS_PASSWORD", "s3cret")
+    ctx = gather_args.main(["iredis"], standalone_mode=False)
+    assert ctx.params["password"] == "s3cret"
+
+
+def test_sentry_flag_overrides_config(config):
+    gather_args.main(["iredis", "--no-sentry"], standalone_mode=False)
+    assert config.sentry is False
+
+    gather_args.main(["iredis", "--sentry"], standalone_mode=False)
+    assert config.sentry is True
+
+    gather_args.main(["iredis"], standalone_mode=False)
+    assert config.sentry is True
+
+
 def test_non_interactive_command_error_exits_non_zero(monkeypatch, config):
     monkeypatch.setattr(
         sys, "argv", ["iredis", "--iredisrc", "/nonexistent/iredisrc", "GET"]

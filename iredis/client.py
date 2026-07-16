@@ -20,6 +20,7 @@ from redis.exceptions import (
     AuthenticationError,
     ConnectionError,
     MovedError,
+    RedisError,
     ResponseError,
     TimeoutError,
 )
@@ -36,7 +37,13 @@ from .commands import (
 from .completers import IRedisCompleter
 from .config import config
 from .data import commands as commands_data
-from .exceptions import AmbiguousCommand, InvalidArguments, NotRedisCommand, NotSupport
+from .exceptions import (
+    AmbiguousCommand,
+    InvalidArguments,
+    IRedisException,
+    NotRedisCommand,
+    NotSupport,
+)
 from .redis_grammar import get_command_grammar
 from .renders import OutputRender
 from .utils import (
@@ -604,10 +611,17 @@ class Client:
         except Exception as e:
             logger.exception(e)
             self.command_failed = True
-            if config.raw:
-                yield OutputRender.render_raw(f"ERROR {str(e)}".encode())
+            # redis server errors and iredis's own errors are already
+            # user-facing messages; keep the exception class name only
+            # for unexpected internal errors
+            if isinstance(e, (RedisError, IRedisException)):
+                error_message = str(e)
             else:
-                yield OutputRender.render_error(f"ERROR {str(e)}")
+                error_message = f"{type(e).__name__}: {e}"
+            if config.raw:
+                yield OutputRender.render_raw(error_message.encode())
+            else:
+                yield OutputRender.render_error(error_message)
         finally:
             config.withscores = False
 
