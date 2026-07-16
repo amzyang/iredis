@@ -81,24 +81,36 @@ geo,GEOSEARCH,command_key_any,render_list
 geo,GEOSEARCHSTORE,command_key_key_any,render_list
 hash,HDEL,command_key_fields,render_int
 hash,HEXISTS,command_key_field,render_int
+hash,HEXPIRE,command_key_second_expire_condition_fields,render_list
+hash,HEXPIREAT,command_key_timestamp_expire_condition_fields,render_list
+hash,HEXPIRETIME,command_key_fields_const_fields,render_list
 hash,HGET,command_key_field,render_bulk_string
 hash,HGETALL,command_key,render_hash_pairs
+hash,HGETDEL,command_key_fields_const_fields,render_list
+hash,HGETEX,command_hgetex,render_list
 hash,HINCRBY,command_key_field_delta,render_int
 hash,HINCRBYFLOAT,command_key_field_float,render_bulk_string
 hash,HKEYS,command_key,command_hkeys
 hash,HLEN,command_key,render_int
 hash,HMGET,command_key_fields,render_list
 hash,HMSET,command_key_fieldvalues,render_bulk_string
+hash,HPERSIST,command_key_fields_const_fields,render_list
+hash,HPEXPIRE,command_key_millisecond_expire_condition_fields,render_list
+hash,HPEXPIREAT,command_key_timestampms_expire_condition_fields,render_list
+hash,HPEXPIRETIME,command_key_fields_const_fields,render_list
+hash,HPTTL,command_key_fields_const_fields,render_list
 hash,HRANDFIELD,command_key_count_withvalues,render_list_or_string
 hash,HSCAN,command_key_cursor_match_pattern_count,command_hscan
 hash,HSET,command_key_field_value,render_int
+hash,HSETEX,command_hsetex,render_int
 hash,HSETNX,command_key_field_value,render_int
 hash,HSTRLEN,command_key_field,render_int
+hash,HTTL,command_key_fields_const_fields,render_list
 hash,HVALS,command_key,render_list
 hyperloglog,PFADD,command_key_values,render_int
 hyperloglog,PFCOUNT,command_keys,render_int
 hyperloglog,PFMERGE,command_newkey_keys,render_simple_string
-list,BLMOVE,command_key_key_lr_lr_timeout, render_bulk_string
+list,BLMOVE,command_key_key_lr_lr_timeout,render_bulk_string
 list,LMOVE,command_key_key_lr_lr,render_bulk_string
 list,BLPOP,command_keys_timeout,render_list_or_string
 list,BRPOP,command_keys_timeout,render_list_or_string
@@ -136,7 +148,7 @@ scripting,SCRIPT LOAD,command_lua_any,render_bulk_string_decode
 server,ACL CAT,command_categorynamex,render_list
 server,ACL DELUSER,command_usernames,render_int
 server,ACL DRYRUN,command_username_parameter_parametersx,render_simple_string
-server,ACL GENPASS,command_countx,render_bulk_string
+server,ACL GENPASS,command_count,render_bulk_string
 server,ACL GETUSER,command_username,render_list
 server,ACL HELP,command,render_help
 server,ACL LIST,command,render_list

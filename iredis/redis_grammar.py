@@ -24,6 +24,12 @@ CONST = {
     "exat_const": "EXAT",
     "pxat_const": "PXAT",
     "condition": "NX XX",
+    # hash field TTL commands allow GT/LT as well; keep it separate from
+    # "condition" so SET/ZADD/GEOADD don't complete GT/LT
+    "expire_condition": "NX XX GT LT",
+    "fields_const": "FIELDS",
+    "persist_const": "PERSIST",
+    "fnx_fxx": "FNX FXX",
     "keepttl": "KEEPTTL",
     "operation": "AND OR XOR NOT",
     "changed": "CH",
@@ -367,6 +373,10 @@ ABORT_CONST = rf"(?P<abort_const>{c('abort_const')})"
 PXAT_CONST = rf"(?P<pxat_const>{c('pxat_const')})"
 EXAT_CONST = rf"(?P<exat_const>{c('exat_const')})"
 WITHVALUES_CONST = rf"(?P<withvalues_const>{c('withvalues_const')})"
+EXPIRE_CONDITION = rf"(?P<expire_condition>{c('expire_condition')})"
+FIELDS_CONST = rf"(?P<fields_const>{c('fields_const')})"
+PERSIST_CONST = rf"(?P<persist_const>{c('persist_const')})"
+FNX_FXX = rf"(?P<fnx_fxx>{c('fnx_fxx')})"
 
 command_grammar = compile(COMMAND)
 
@@ -688,12 +698,60 @@ GRAMMAR = {
         (
             (\s+ {EXPIRATION} \s+ {MILLISECOND})|
             (\s+ {PXAT_CONST} \s+ {TIMESTAMPMS})|
-            (\s+ {EXAT_CONST} \s+ {TIMESTAMP})
+            (\s+ {EXAT_CONST} \s+ {TIMESTAMP})|
+            (\s+ {PERSIST_CONST})
         )?
         \s*""",
     "command_key_count_withvalues": rf"""
         \s+ {KEY}
         (\s+ {COUNT} (\s+ {WITHVALUES_CONST})?)?
+        \s*""",
+    # hash field TTL commands (Redis >= 7.4)
+    "command_key_second_expire_condition_fields": rf"""
+        \s+ {KEY} \s+ {SECOND}
+        (\s+ {EXPIRE_CONDITION})?
+        \s+ {FIELDS_CONST} \s+ {COUNT} \s+ {FIELDS}
+        \s*""",
+    "command_key_millisecond_expire_condition_fields": rf"""
+        \s+ {KEY} \s+ {MILLISECOND}
+        (\s+ {EXPIRE_CONDITION})?
+        \s+ {FIELDS_CONST} \s+ {COUNT} \s+ {FIELDS}
+        \s*""",
+    "command_key_timestamp_expire_condition_fields": rf"""
+        \s+ {KEY} \s+ {TIMESTAMP}
+        (\s+ {EXPIRE_CONDITION})?
+        \s+ {FIELDS_CONST} \s+ {COUNT} \s+ {FIELDS}
+        \s*""",
+    "command_key_timestampms_expire_condition_fields": rf"""
+        \s+ {KEY} \s+ {TIMESTAMPMS}
+        (\s+ {EXPIRE_CONDITION})?
+        \s+ {FIELDS_CONST} \s+ {COUNT} \s+ {FIELDS}
+        \s*""",
+    "command_key_fields_const_fields": rf"""
+        \s+ {KEY}
+        \s+ {FIELDS_CONST} \s+ {COUNT} \s+ {FIELDS}
+        \s*""",
+    "command_hgetex": rf"""
+        \s+ {KEY}
+        (
+            (\s+ {EXPIRATION} \s+ {MILLISECOND})|
+            (\s+ {EXAT_CONST} \s+ {TIMESTAMP})|
+            (\s+ {PXAT_CONST} \s+ {TIMESTAMPMS})|
+            (\s+ {PERSIST_CONST})
+        )?
+        \s+ {FIELDS_CONST} \s+ {COUNT} \s+ {FIELDS}
+        \s*""",
+    "command_hsetex": rf"""
+        \s+ {KEY}
+        (\s+ {FNX_FXX})?
+        (
+            (\s+ {EXPIRATION} \s+ {MILLISECOND})|
+            (\s+ {EXAT_CONST} \s+ {TIMESTAMP})|
+            (\s+ {PXAT_CONST} \s+ {TIMESTAMPMS})|
+            (\s+ {KEEPTTL})
+        )?
+        \s+ {FIELDS_CONST} \s+ {COUNT}
+        (\s+ {FIELD} \s+ {VALUE})+
         \s*""",
 }
 

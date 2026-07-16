@@ -479,3 +479,18 @@ def test_username_touch_for_response():
         "hello",
         "world",
     ]
+
+
+def test_hash_field_ttl_commands_complete_with_hint():
+    fake_document = MagicMock()
+    fake_document.text_before_cursor = fake_document.text = "HEXPI"
+    completer = IRedisCompleter(hint=True)
+    completions = list(completer.get_completions(fake_document, None))
+    assert [word.text for word in completions] == [
+        "HEXPIRE",
+        "HEXPIREAT",
+        "HEXPIRETIME",
+    ]
+    for completion in completions:
+        # hint text comes from commands.json's summary
+        assert completion.display_meta_text
