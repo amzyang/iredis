@@ -1,5 +1,6 @@
 import sys
 import tempfile
+import types
 from unittest.mock import patch
 
 import click
@@ -507,3 +508,45 @@ def test_shell_completion_dsn_missing_config_is_silent(monkeypatch, capsys, tmp_
 def test_shell_completion_path_options_use_file_type(monkeypatch, capsys, option):
     _complete(monkeypatch, f"iredis {option}", "2")
     assert "file" in capsys.readouterr().out
+
+
+def test_main_hijacks_lowercase_sentry_subcommand(monkeypatch, config):
+    monkeypatch.setattr(
+        sys, "argv", ["iredis", "--iredisrc", "/nonexistent/iredisrc", "sentry"]
+    )
+    monkeypatch.setattr("iredis.entry.run_diagnose", lambda *args, **kwargs: 42)
+    client_calls = []
+    monkeypatch.setattr(
+        "iredis.entry.create_client", lambda params: client_calls.append(params)
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        main()
+
+    assert exc.value.code == 42
+    assert not client_calls
+
+
+def test_main_uppercase_sentry_still_goes_to_server(monkeypatch, config):
+    monkeypatch.setattr(
+        sys, "argv", ["iredis", "--iredisrc", "/nonexistent/iredisrc", "SENTRY"]
+    )
+    monkeypatch.setattr("sys.stdin", types.SimpleNamespace(isatty=lambda: True))
+    diagnose_calls = []
+    monkeypatch.setattr(
+        "iredis.entry.run_diagnose",
+        lambda *args, **kwargs: diagnose_calls.append(args),
+    )
+    sent_commands = []
+
+    def fake_send_command(command, completer):
+        sent_commands.append(command)
+        return iter([])
+
+    fake_client = types.SimpleNamespace(send_command=fake_send_command)
+    monkeypatch.setattr("iredis.entry.create_client", lambda params: fake_client)
+
+    main()
+
+    assert not diagnose_calls
+    assert sent_commands == ["SENTRY"]

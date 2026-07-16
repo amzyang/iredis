@@ -30,7 +30,7 @@ from .config import (
 from .key_bindings import kb as key_bindings
 from .lexer import IRedisLexer
 from .processors import PasswordProcessor, UpdateBottomProcessor, UserInputCommand
-from .sentry import setup_sentry
+from .sentry import run_diagnose, setup_sentry
 from .style import THEMES, get_style
 from .utils import (
     ESCAPE_FLUSH_TIMEOUT,
@@ -605,6 +605,12 @@ def main():
         e.show()
     if not ctx:  # called help
         return
+
+    # hidden diagnostic subcommand: `iredis sentry` (exact lowercase, no
+    # extra args) verifies telemetry end to end without touching redis;
+    # any other casing still goes to the server as a regular command
+    if ctx.params["cmd"] == ("sentry",):
+        sys.exit(run_diagnose(config.sentry_dsn, enabled=config.sentry))
 
     setup_sentry(config.sentry_dsn, enabled=config.sentry)
 
