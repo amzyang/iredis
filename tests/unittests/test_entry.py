@@ -9,6 +9,7 @@ from prompt_toolkit.formatted_text import FormattedText
 
 from iredis.entry import (
     SkipAuthFileHistory,
+    create_client,
     create_prompt_session,
     gather_args,
     greetings,
@@ -510,6 +511,123 @@ def test_shell_completion_path_options_use_file_type(monkeypatch, capsys, option
     assert "file" in capsys.readouterr().out
 
 
+def _client_params(**overrides):
+    params = {
+        "h": "127.0.0.1",
+        "p": "6379",
+        "n": None,
+        "username": None,
+        "password": None,
+        "client_name": None,
+        "prompt": None,
+        "verify_ssl": None,
+        "dsn": None,
+        "url": None,
+        "socket": None,
+    }
+    params.update(overrides)
+    return params
+
+
+def test_natmap_rejects_invalid_format():
+    with pytest.raises(click.exceptions.BadParameter):
+        gather_args.main(["iredis", "--natmap", "bad-format"], standalone_mode=False)
+
+
+def test_natmap_rejects_non_integer_port():
+    with pytest.raises(click.exceptions.BadParameter):
+        gather_args.main(
+            ["iredis", "--natmap", "remote:6379:local:abc"], standalone_mode=False
+        )
+
+
+def test_url_rejects_unknown_scheme():
+    with pytest.raises(click.exceptions.BadParameter):
+        gather_args.main(
+            ["iredis", "--url", "http://localhost:6379"], standalone_mode=False
+        )
+
+
+def test_dsn_errors_even_when_alias_dsn_is_empty(config, capsys):
+    config.alias_dsn = {}
+    with pytest.raises(SystemExit) as exc:
+        create_client(_client_params(dsn="ghost"))
+    assert exc.value.code == 1
+    assert "alias_dsn" in capsys.readouterr().err
+
+
+def test_n_zero_overrides_url_db(config):
+    with patch("iredis.entry.Client") as mock_client:
+        create_client(_client_params(url="redis://localhost:6379/5", n=0))
+    assert mock_client.call_args.kwargs["db"] == 0
+
+
+def test_url_db_used_when_n_not_given(config):
+    with patch("iredis.entry.Client") as mock_client:
+        create_client(_client_params(url="redis://localhost:6379/5"))
+    assert mock_client.call_args.kwargs["db"] == 5
+
+
+def test_db_defaults_to_zero_without_url(config):
+    with patch("iredis.entry.Client") as mock_client:
+        create_client(_client_params())
+    assert mock_client.call_args.kwargs["db"] == 0
+
+
+def test_bad_dsn_uri_in_config_shows_error_not_traceback(config, capsys):
+    config.alias_dsn = {"dev": "http://localhost:6379"}
+    with pytest.raises(SystemExit) as exc:
+        create_client(_client_params(dsn="dev"))
+    assert exc.value.code == 1
+    assert "following schemes" in capsys.readouterr().err
+
+
+def test_verify_ssl_loaded_from_config_file(config, tmp_path):
+    iredisrc = tmp_path / "iredisrc"
+    iredisrc.write_text("[main]\nverify_ssl = none\n")
+    gather_args.main(["iredis", "--iredisrc", str(iredisrc)], standalone_mode=False)
+    assert config.verify_ssl == "none"
+
+    gather_args.main(
+        ["iredis", "--verify-ssl", "required", "--iredisrc", str(iredisrc)],
+        standalone_mode=False,
+    )
+    assert config.verify_ssl == "required"
+
+
+def test_non_interactive_command_error_exits_non_zero(monkeypatch, config):
+    monkeypatch.setattr(
+        sys, "argv", ["iredis", "--iredisrc", "/nonexistent/iredisrc", "GET"]
+    )
+    monkeypatch.setattr("sys.stdin", types.SimpleNamespace(isatty=lambda: True))
+    fake_client = types.SimpleNamespace(
+        send_command=lambda command, completer: iter([b"ERROR wrong number"]),
+        command_failed=True,
+    )
+    monkeypatch.setattr("iredis.entry.create_client", lambda params: fake_client)
+
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 1
+
+
+def test_stdin_pipe_command_error_exits_non_zero(monkeypatch, config):
+    monkeypatch.setattr(sys, "argv", ["iredis", "--iredisrc", "/nonexistent/iredisrc"])
+    monkeypatch.setattr(
+        "sys.stdin",
+        types.SimpleNamespace(isatty=lambda: False, readlines=lambda: ["GET\n"]),
+    )
+    fake_client = types.SimpleNamespace(
+        send_command=lambda command, completer: iter([b"ERROR wrong number"]),
+        command_failed=True,
+    )
+    monkeypatch.setattr("iredis.entry.create_client", lambda params: fake_client)
+
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 1
+
+
 def test_main_hijacks_lowercase_sentry_subcommand(monkeypatch, config):
     monkeypatch.setattr(
         sys, "argv", ["iredis", "--iredisrc", "/nonexistent/iredisrc", "sentry"]
@@ -543,7 +661,9 @@ def test_main_uppercase_sentry_still_goes_to_server(monkeypatch, config):
         sent_commands.append(command)
         return iter([])
 
-    fake_client = types.SimpleNamespace(send_command=fake_send_command)
+    fake_client = types.SimpleNamespace(
+        send_command=fake_send_command, command_failed=False
+    )
     monkeypatch.setattr("iredis.entry.create_client", lambda params: fake_client)
 
     main()

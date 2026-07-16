@@ -39,6 +39,11 @@ retry_times = 2
 
 socket_keepalive = True
 
+# TLS certificate verification strategy for rediss:// connections,
+# options are: "none", "optional", "required" (default).
+# The --verify-ssl command line flag overrides this.
+# verify_ssl = required
+
 # IRedis support running shell command to parse the response, like this:
 # > get json-str | jq .
 # However that will allow any shell command to execute under iredis REPL,

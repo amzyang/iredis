@@ -139,6 +139,7 @@ def load_config_files(iredisrc):
     config.pager = config_obj["main"].get("pager")
     config.enable_pager = config_obj["main"].as_bool("enable_pager")
     config.prompt = config_obj["main"].get("prompt")
+    config.verify_ssl = config_obj["main"].get("verify_ssl")
     config.greetings = config_obj["main"].as_bool("greetings")
     config.sentry = config_obj["main"].as_bool("sentry")
     config.sentry_dsn = config_obj["main"].get("sentry_dsn")

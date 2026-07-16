@@ -290,6 +290,33 @@ def complete_decode(ctx, param, incomplete):
     return [e for e in COMMON_DECODE_ENCODINGS if e.startswith(incomplete.lower())]
 
 
+def validate_url(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return value
+    try:
+        parse_url(value)
+    except ValueError as e:
+        raise click.BadParameter(str(e))
+    return value
+
+
+def validate_natmap(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return value
+    natmap = {}
+    try:
+        for entry in value.split(","):
+            remote_host, remote_port, local_host, local_port = entry.strip().split(":")
+            natmap[f"{remote_host}:{remote_port}"] = (local_host, int(local_port))
+    except ValueError:
+        raise click.BadParameter(
+            "natmap must be in format "
+            "remoteHost:remotePort:localHost:localPort (comma-separated "
+            f"for multiple nodes), got: {value}"
+        )
+    return natmap
+
+
 def complete_dsn(ctx, param, incomplete):
     # completion callbacks must never raise or print
     try:
@@ -316,14 +343,21 @@ def complete_dsn(ctx, param, incomplete):
     type=click.Path(),
     help="Server socket (overrides hostname and port).",
 )
-@click.option("-n", help="Database number.(overwrites dsn/url's db number)", default=0)
+@click.option(
+    "-n",
+    type=int,
+    help="Database number.(overwrites dsn/url's db number)",
+    default=None,
+)
 @click.option(
     "-u",
     "--username",
     help="User name used to auth, will be ignore for redis version < 6.",
 )
 @click.option("-a", "--password", help="Password to use when connecting to the server.")
-@click.option("--url", default=None, envvar="IREDIS_URL", help=URL_HELP)
+@click.option(
+    "--url", default=None, envvar="IREDIS_URL", callback=validate_url, help=URL_HELP
+)
 @click.option(
     "-d",
     "--dsn",
@@ -387,6 +421,8 @@ def complete_dsn(ctx, param, incomplete):
 @click.option(
     "--natmap",
     default=None,
+    callback=validate_natmap,
+    metavar="REMOTE_HOST:REMOTE_PORT:LOCAL_HOST:LOCAL_PORT[,...]",
     help=(
         "NAT map for Redis cluster behind SSH tunnels. "
         "Format: remoteHost:remotePort:localHost:localPort "
@@ -470,14 +506,8 @@ def gather_args(
     if greetings is not None:
         config.greetings = greetings
 
-    if natmap is not None:
-        for entry in natmap.split(","):
-            parts = entry.strip().split(":")
-            remote_host, remote_port, local_host, local_port = parts
-            config.natmap[f"{remote_host}:{remote_port}"] = (
-                local_host,
-                int(local_port),
-            )
+    if natmap:
+        config.natmap = natmap
 
     return ctx
 
@@ -493,7 +523,7 @@ def edit_and_execute(event):
 
 def resolve_dsn(dsn):
     try:
-        dsn_uri = config.alias_dsn[dsn]  # ty: ignore[not-subscriptable]
+        dsn_uri = (config.alias_dsn or {})[dsn]
     except KeyError:
         click.secho(
             "Could not find the specified DSN in the config file. "
@@ -518,18 +548,23 @@ def create_client(params):
     password = params["password"]
     client_name = params["client_name"]
     prompt = params["prompt"]
-    verify_ssl = params["verify_ssl"]
+    # config.verify_ssl already merges iredisrc and the command line flag
+    verify_ssl = params["verify_ssl"] or config.verify_ssl
 
     dsn_from_url = None
     dsn = params["dsn"]
-    if config.alias_dsn and dsn:
-        dsn_uri = resolve_dsn(dsn)
-        dsn_from_url = parse_url(dsn_uri)
-    if params["url"]:
-        dsn_from_url = parse_url(params["url"])
+    try:
+        if dsn:
+            dsn_from_url = parse_url(resolve_dsn(dsn))
+        if params["url"]:
+            dsn_from_url = parse_url(params["url"])
+    except ValueError as e:
+        click.secho(str(e), err=True, fg="red")
+        sys.exit(1)
     if dsn_from_url:
-        # db from command lint options should be high priority
-        db = db if db else dsn_from_url.db
+        # db from command line options should be high priority,
+        # an explicit `-n 0` overrides the db in dsn/url as well
+        db = db if db is not None else dsn_from_url.db
         verify_ssl = verify_ssl or dsn_from_url.verify_ssl
         return Client(
             host=dsn_from_url.host,
@@ -543,6 +578,8 @@ def create_client(params):
             prompt=prompt,
             verify_ssl=verify_ssl,
         )
+    if db is None:
+        db = 0
     if params["socket"]:
         return Client(
             scheme="unix",
@@ -622,6 +659,8 @@ def main():
             logger.debug(f"[Command stdin] {line}")
             for answer in client.send_command(line, None):
                 write_result(answer)
+        if client.command_failed:
+            sys.exit(1)
         return
 
     # no interactive mode, directly run a command
@@ -630,6 +669,8 @@ def main():
         for answer in answers:
             write_result(answer)
         logger.warning("[OVER] command executed, exit...")
+        if client.command_failed:
+            sys.exit(1)
         return
 
     session = create_prompt_session()

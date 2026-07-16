@@ -804,3 +804,15 @@ def test_scan_keys_stop_check_aborts_between_rounds(iredis_client, clean_redis):
 
     assert keys == []
     assert cursor != 0
+
+
+def test_send_command_sets_command_failed_on_server_error(iredis_client, clean_redis):
+    assert not iredis_client.command_failed
+    # GET without key: server replies with an error
+    list(iredis_client.send_command("GET"))
+    assert iredis_client.command_failed
+
+
+def test_send_command_success_keeps_command_failed_false(iredis_client, clean_redis):
+    list(iredis_client.send_command("SET foo bar"))
+    assert not iredis_client.command_failed

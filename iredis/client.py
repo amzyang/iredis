@@ -95,6 +95,10 @@ class Client:
         # completer of current REPL session, updated on every send_command
         self._completer = None
 
+        # set once any command fails, so non-interactive mode can exit
+        # with a non-zero code
+        self.command_failed = False
+
         self.build_connection()
 
         # all command upper case
@@ -599,6 +603,7 @@ class Client:
                     yield from self.unsubscribing()
         except Exception as e:
             logger.exception(e)
+            self.command_failed = True
             if config.raw:
                 yield OutputRender.render_raw(f"ERROR {str(e)}".encode())
             else:
