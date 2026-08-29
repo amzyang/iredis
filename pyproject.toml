@@ -2,42 +2,37 @@
 name = "iredis"
 version = "2.4.0"
 description = "Terminal client for Redis with auto-completion and syntax highlighting."
-authors = [{ name = "laixintao", email = "laixintao1995@163.com" }]
 readme = "README.md"
+requires-python = ">=3.10"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
-keywords = ["Redis", "key-value store", "Commandline tools", "Redis Client"]
+authors = [{ name = "laixintao", email = "laixintao1995@163.com" }]
+keywords = ["Commandline tools", "Redis", "Redis Client", "key-value store"]
 classifiers = [
-    # see https://pypi.org/pypi?%3Aaction=list_classifiers
-    "Development Status :: 4 - Beta",
-    "Environment :: Console",
-    "Environment :: Console :: Curses",
-    "Environment :: MacOS X",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Topic :: Database",
-    "Intended Audience :: Developers",
+  # see https://pypi.org/pypi?%3Aaction=list_classifiers
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Environment :: Console :: Curses",
+  "Environment :: MacOS X",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Database",
 ]
 dependencies = [
-    # >=3.0.29 for prompt_toolkit.cursor_shapes (vi mode modal cursor)
-    "prompt-toolkit>=3.0.29,<4",
-    "pygments>=2,<3",
-    "mistune>=3.0,<4",
-    "configobj>=5.0,<6",
-    "click>=8.0,<9",
-    "redis>=5.0.0,<9.0.0",
-    "packaging>=24.2",
-    "python-dateutil>=2.8.2,<3",
+  "click>=8.0",
+  "configobj>=5.0",
+  "mistune>=3.0",
+  "packaging>=24.2",  # >=3.0.29 for prompt_toolkit.cursor_shapes (vi mode modal cursor)
+  "prompt-toolkit>=3.0.29",
+  "pygments>=2",
+  "python-dateutil>=2.8.2",
+  "redis>=5.0.0",
 ]
-
-[project.optional-dependencies]
-# crash telemetry, see iredis/sentry.py; without it telemetry silently stays off
-sentry = ["sentry-sdk>=2,<3"]
 
 [project.urls]
 Homepage = "https://github.com/amzyang/iredis"
@@ -46,24 +41,24 @@ Repository = "https://github.com/amzyang/iredis"
 [project.scripts]
 iredis = "iredis.entry:main"
 
+[project.optional-dependencies]
+# crash telemetry, see iredis/sentry.py; without it telemetry silently stays off
+sentry = ["sentry-sdk>=2"]
+
 [dependency-groups]
 dev = [
-    "freezegun>=1.4.0",
-    "pytest>=8.0",
-    "pexpect>=4.7",
-    "pyte>=0.8",
-    "pre-commit>=4.0",
-    "ruff>=0.14",
-    "ty>=0.0.1a21",
+  "freezegun>=1.4.0",
+  "pexpect>=4.7",
+  "pre-commit>=4.0",
+  "pyte>=0.8",
+  "pytest>=8.0",
+  "ruff>=0.14",
+  "ty>=0.0.1a21",
 ]
 
 [build-system]
-requires = ["uv_build>=0.11,<0.13"]
+requires = ["uv_build>=0.11"]
 build-backend = "uv_build"
-
-[tool.uv.build-backend]
-# flat layout: the iredis package lives at the repository root
-module-root = ""
 
 [tool.ruff]
 extend-exclude = ["redis-doc"]
@@ -73,3 +68,7 @@ select = ["E4", "E7", "E9", "F", "W", "I", "UP"]
 
 [tool.ty.src]
 exclude = ["tests", "scripts"]
+
+[tool.uv.build-backend]
+# flat layout: the iredis package lives at the repository root
+module-root = ""
