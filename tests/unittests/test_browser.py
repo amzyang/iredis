@@ -447,11 +447,11 @@ def test_detail_pane_keeps_manual_scroll():
 # === mouse support ===
 
 
-def mouse(event_type):
+def mouse(event_type, x=0, button=MouseButton.LEFT):
     return MouseEvent(
-        position=Point(0, 0),
+        position=Point(x, 0),
         event_type=event_type,
-        button=MouseButton.LEFT,
+        button=button,
         modifiers=frozenset(),
     )
 
@@ -474,9 +474,10 @@ def test_key_rows_fragments_carry_mouse_handlers():
         assert all(len(fragment) == 3 and callable(fragment[2]) for fragment in row)
 
 
-def test_keys_panel_has_fixed_width():
+def test_keys_panel_default_width():
     browser = make_browser([("user:1", "string")])
-    assert browser.tree_window.width == TREE_WIDTH
+    assert browser.tree_width == TREE_WIDTH
+    assert browser.tree_window.width() == TREE_WIDTH
 
 
 def test_selected_row_background_spans_panel_width():
@@ -572,6 +573,80 @@ def test_detail_mouse_wheel_scrolls_and_click_focuses(monkeypatch):
 
     browser.detail_mouse_handler(mouse(MouseEventType.MOUSE_UP))
     app.layout.focus.assert_called_once_with(browser.detail_window)
+
+
+# === separator drag: resize the panes ===
+# get_app() falls back to a dummy 80x40 terminal: drags clamp inside [20, 60]
+
+
+def test_separator_press_starts_drag_and_zone_resizes():
+    browser = make_browser([("user:1", "string")])
+    handler = browser.body_drag_handler(0)
+    # without a press on the separator, the zone passes events through
+    assert handler(mouse(MouseEventType.MOUSE_MOVE, x=50)) is NotImplemented
+    assert browser.tree_width == TREE_WIDTH
+
+    assert browser.separator_mouse_handler(mouse(MouseEventType.MOUSE_DOWN)) is None
+    handler(mouse(MouseEventType.MOUSE_MOVE, x=30))
+    assert browser.tree_width == 30
+    assert browser.tree_window.width() == 30
+
+
+def test_separator_ignores_non_left_press():
+    browser = make_browser([("user:1", "string")])
+    event = mouse(MouseEventType.MOUSE_DOWN, button=MouseButton.RIGHT)
+    assert browser.separator_mouse_handler(event) is NotImplemented
+    assert browser.separator_dragging is False
+
+
+def test_body_drag_maps_zone_origin_to_screen_columns():
+    browser = make_browser([("user:1", "string")])
+    browser.separator_mouse_handler(mouse(MouseEventType.MOUSE_DOWN))
+    browser.body_drag_handler(2)(mouse(MouseEventType.MOUSE_MOVE, x=32))
+    assert browser.tree_width == 30
+
+
+def test_separator_drag_clamps_to_pane_minimums():
+    browser = make_browser([("user:1", "string")])
+    browser.separator_mouse_handler(mouse(MouseEventType.MOUSE_DOWN))
+    handler = browser.body_drag_handler(0)
+    handler(mouse(MouseEventType.MOUSE_MOVE, x=3))
+    assert browser.tree_width == 20
+    handler(mouse(MouseEventType.MOUSE_MOVE, x=200))
+    assert browser.tree_width == 60
+
+
+def test_separator_drag_ends_on_release():
+    browser = make_browser([("user:1", "string")])
+    browser.separator_mouse_handler(mouse(MouseEventType.MOUSE_DOWN))
+    handler = browser.body_drag_handler(0)
+    handler(mouse(MouseEventType.MOUSE_MOVE, x=30))
+    handler(mouse(MouseEventType.MOUSE_UP, x=30))
+
+    assert handler(mouse(MouseEventType.MOUSE_MOVE, x=50)) is NotImplemented
+    assert browser.tree_width == 30
+
+
+def test_separator_drag_ends_when_button_already_up():
+    browser = make_browser([("user:1", "string")])
+    browser.separator_mouse_handler(mouse(MouseEventType.MOUSE_DOWN))
+    browser.body_drag_handler(0)(
+        mouse(MouseEventType.MOUSE_MOVE, x=50, button=MouseButton.NONE)
+    )
+    assert browser.tree_width == TREE_WIDTH  # a hover move never resizes
+    assert browser.separator_dragging is False
+
+
+def test_selected_row_padding_follows_dragged_width():
+    browser = make_browser([("user:1", "string"), ("user:2", "string")])
+    browser.tree_width = 30
+    selected = [
+        fragment
+        for row in row_fragments(browser)
+        for fragment in row
+        if fragment[0] == "class:selected"
+    ]
+    assert len(selected[0][1]) == 30
 
 
 # === copy shortcuts ===

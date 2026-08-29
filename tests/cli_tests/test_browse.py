@@ -162,6 +162,31 @@ def test_browse_repl_runs_command(browse_cli):
     cli.wait_for(r"127\.0\.0\.1:6379\[15\]>")
 
 
+def test_browse_separator_drag_resizes_panes(browse_cli):
+    cli = browse_cli
+    cli.child.sendline("BROWSE user:*")
+    cli.wait_for(r"│")
+
+    def divider_col():
+        for line in cli.screen.display:
+            index = line.find("│")
+            if index != -1:
+                return index
+        return -1
+
+    before = divider_col()
+    # SGR mouse: press the separator, drag 10 columns left, release;
+    # the pumps let the drag zone (re)register between the events, like
+    # a real terminal streaming motion events
+    cli.child.send(f"\x1b[<0;{before + 1};5M")
+    cli.pump(0.5)
+    cli.child.send(f"\x1b[<32;{before - 9};5M")
+    cli.pump(0.5)
+    cli.child.send(f"\x1b[<0;{before - 9};5m")
+    cli.pump(0.5)
+    assert divider_col() == before - 10
+
+
 def test_browse_refuses_non_tty():
     iredisrc = tempfile.mktemp(suffix=".iredisrc")
     with open(iredisrc, "w") as config_file:

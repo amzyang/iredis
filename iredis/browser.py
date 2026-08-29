@@ -38,8 +38,8 @@ connection (MONITOR, SUBSCRIBE) are rejected, and dangerous commands are
 too while the warning config is on -- there is no room to confirm here.
 
 The mouse works too: click a key to select it (a group folds/unfolds),
-the wheel scrolls any pane, and a click on the 🔍 box edits the
-pattern.
+the wheel scrolls any pane, a click on the 🔍 box edits the pattern, and
+dragging the ``│`` separator resizes the two panes.
 """
 
 import logging
@@ -55,6 +55,7 @@ from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import (
     BufferControl,
+    Container,
     Dimension,
     Float,
     FloatContainer,
@@ -66,7 +67,7 @@ from prompt_toolkit.layout import (
     Window,
 )
 from prompt_toolkit.layout.menus import CompletionsMenu
-from prompt_toolkit.mouse_events import MouseEventType
+from prompt_toolkit.mouse_events import MouseButton, MouseEventType
 from prompt_toolkit.utils import get_cwidth
 
 from .commands import split_command_args, split_unknown_args
@@ -80,8 +81,11 @@ logger = logging.getLogger(__name__)
 
 # rows used by the pattern bar and the footer around the key list
 CHROME_HEIGHT = 2
-# fixed width of the keys panel, like Medis' sidebar
+# initial width of the keys panel, like Medis' sidebar; dragging the pane
+# separator resizes it, but neither pane ever collapses below its minimum
 TREE_WIDTH = 40
+TREE_MIN_WIDTH = 20
+DETAIL_MIN_WIDTH = 20
 # namespace separator for grouping keys into a tree, like Medis
 SEPARATOR = ":"
 # buckets smaller than this render as plain keys instead of a group
@@ -216,9 +220,9 @@ def _fit(text, width):
     return "".join(out) + "…"
 
 
-def _pad(text):
+def _pad(text, width):
     """Pad by display width so the highlight covers the whole panel."""
-    return text + " " * max(0, TREE_WIDTH - get_cwidth(text))
+    return text + " " * max(0, width - get_cwidth(text))
 
 
 def _clickable(fragments, handler):
@@ -272,6 +276,63 @@ class RecentPatternCompleter(Completer):
             yield Completion(pattern, start_position=-len(text))
 
 
+class SeparatorControl(FormattedTextControl):
+    """The pane separator column: it renders no text, so the default
+    content-cell lookup would drop its mouse events; the whole control
+    is one handler instead."""
+
+    def __init__(self, handler):
+        super().__init__("")
+        self._handler = handler
+
+    def mouse_handler(self, mouse_event):
+        return self._handler(mouse_event)
+
+
+class SeparatorDragZone(Container):
+    """Wraps the browser body to track an active separator drag.
+
+    The handlers each pane registers per cell receive positions
+    translated to *content* coordinates -- clipped to each line's text,
+    so they lie over blank cells. This range handler, laid over the
+    whole body after the panes rendered, receives absolute screen
+    coordinates instead: the pointer column is the wanted tree width.
+    Outside a drag nothing is registered and the panes behave as usual.
+    """
+
+    def __init__(self, content, browser):
+        self.content = content
+        self.browser = browser
+
+    def reset(self):
+        self.content.reset()
+
+    def preferred_width(self, max_available_width):
+        return self.content.preferred_width(max_available_width)
+
+    def preferred_height(self, width, max_available_height):
+        return self.content.preferred_height(width, max_available_height)
+
+    def get_children(self):
+        return [self.content]
+
+    def write_to_screen(
+        self, screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
+    ):
+        self.content.write_to_screen(
+            screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
+        )
+        if not self.browser.separator_dragging:
+            return
+        mouse_handlers.set_mouse_handler_for_range(
+            x_min=write_position.xpos,
+            x_max=write_position.xpos + write_position.width,
+            y_min=write_position.ypos,
+            y_max=write_position.ypos + write_position.height,
+            handler=self.browser.body_drag_handler(write_position.xpos),
+        )
+
+
 class KeyBrowser:
     def __init__(self, client, pattern, history=None, executor=None):
         self.client = client
@@ -297,6 +358,9 @@ class KeyBrowser:
         # one-shot footer message (e.g. "value copied"), cleared on any key
         self.notice = None
         self.expanded = set()
+        # panes resize by dragging the separator; the tree starts Medis-sized
+        self.tree_width = TREE_WIDTH
+        self.separator_dragging = False
         # repl under the detail pane: its own recall history, last output
         self.repl_history = InMemoryHistory()
         self.repl_output = [("class:type", "repl: type a redis command, Enter runs it")]
@@ -540,6 +604,43 @@ class KeyBrowser:
             mouse_event, self.detail_pane, self.detail_window
         )
 
+    # === separator drag: resize the panes with the mouse ===
+
+    def separator_mouse_handler(self, mouse_event):
+        """A left press on the ``│`` separator starts the resize drag;
+        the SeparatorDragZone laid over the body tracks it from there."""
+        if (
+            mouse_event.event_type == MouseEventType.MOUSE_DOWN
+            and mouse_event.button == MouseButton.LEFT
+        ):
+            self.separator_dragging = True
+            return None
+        return NotImplemented
+
+    def body_drag_handler(self, xpos):
+        """One handler covering the whole body while a drag is active,
+        called with absolute screen coordinates (xpos is the body's
+        left edge, screen column 0 in practice)."""
+
+        def handler(mouse_event):
+            if not self.separator_dragging:
+                return NotImplemented
+            if (
+                mouse_event.event_type == MouseEventType.MOUSE_MOVE
+                and mouse_event.button == MouseButton.LEFT
+            ):
+                self._set_tree_width(mouse_event.position.x - xpos)
+                return None
+            # released, or moving with the button already up: drag over
+            self.separator_dragging = False
+            return None
+
+        return handler
+
+    def _set_tree_width(self, width):
+        columns = get_app().output.get_size().columns
+        self.tree_width = max(TREE_MIN_WIDTH, min(width, columns - DETAIL_MIN_WIDTH))
+
     # === repl: run any redis command without leaving the browser ===
 
     def _show_repl_output(self, command, fragments):
@@ -729,12 +830,12 @@ class KeyBrowser:
                 # the count stays visible, the name gets whatever is left
                 name = _fit(
                     path.rsplit(SEPARATOR, 1)[-1],
-                    max(4, TREE_WIDTH - 3 - len(indent) - get_cwidth(count_text)),
+                    max(4, self.tree_width - 3 - len(indent) - get_cwidth(count_text)),
                 )
                 arrow = "▾" if is_open else "▸"
                 if selected:
                     text = f" {indent}{arrow} {name}{count_text}"
-                    out.append(("class:selected", _pad(text), click))
+                    out.append(("class:selected", _pad(text, self.tree_width), click))
                 else:
                     out.append(("class:group", f" {indent}{arrow} {name}", click))
                     out.append(("class:type", count_text, click))
@@ -744,10 +845,10 @@ class KeyBrowser:
                 key_type = self.types.get(key)
                 abbrev = TYPE_ABBREV.get(key_type, key_type[:4]) if key_type else "…"
                 style = f"class:type-{key_type}" if key_type else "class:type"
-                name = _fit(key, TREE_WIDTH - 1 - len(indent) - TYPE_WIDTH)
+                name = _fit(key, self.tree_width - 1 - len(indent) - TYPE_WIDTH)
                 if selected:
                     text = f" {indent}{abbrev:{TYPE_WIDTH}}{name}"
-                    out.append(("class:selected", _pad(text), click))
+                    out.append(("class:selected", _pad(text, self.tree_width), click))
                 else:
                     out.append((style, f" {indent}{abbrev:{TYPE_WIDTH}}", click))
                     out.append(("class:key", name, click))
@@ -820,7 +921,7 @@ class KeyBrowser:
                 focusable=True,
                 key_bindings=self.tree_key_bindings(),
             ),
-            width=TREE_WIDTH,
+            width=lambda: self.tree_width,
         )
         self.detail_window = Window(
             FormattedTextControl(
@@ -903,12 +1004,20 @@ class KeyBrowser:
                 ),
             ]
         )
-        body = VSplit(
-            [
-                self.tree_window,
-                Window(width=1, char="│", style="class:bottom-toolbar"),
-                detail_column,
-            ]
+        body = SeparatorDragZone(
+            VSplit(
+                [
+                    self.tree_window,
+                    Window(
+                        SeparatorControl(self.separator_mouse_handler),
+                        width=1,
+                        char="│",
+                        style="class:bottom-toolbar",
+                    ),
+                    detail_column,
+                ]
+            ),
+            self,
         )
         footer = Window(
             FormattedTextControl(lambda: FormattedText(self.footer_bar())),
