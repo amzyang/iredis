@@ -1,7 +1,7 @@
 import sys
 import tempfile
 import types
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import click
 import pytest
@@ -16,6 +16,7 @@ from iredis.entry import (
     is_too_tall,
     main,
     parse_url,
+    repl,
     write_result,
 )
 from iredis.utils import DSN
@@ -167,6 +168,28 @@ def test_command_vi_options_higher_priority():
         standalone_mode=False,
     )
     assert config.vi_mode is False
+
+
+def test_repl_prefills_did_you_mean_suggestion(config):
+    client = MagicMock()
+    client.prefill_command = ""
+
+    def fake_send_command(command, completer):
+        client.prefill_command = "DEL a"
+        return iter([])
+
+    client.send_command.side_effect = fake_send_command
+    session = MagicMock()
+    session.prompt.side_effect = ["delete a", EOFError]
+
+    # stub timer: repl's call would bump the global counter test_timer asserts on
+    with pytest.raises(SystemExit), patch("iredis.entry.timer"):
+        repl(client, session, 0)
+
+    assert session.prompt.call_args_list[0][1]["default"] == ""
+    assert session.prompt.call_args_list[1][1]["default"] == "DEL a"
+    # prefill is one-shot: consumed once it's shown
+    assert client.prefill_command == ""
 
 
 def test_prompt_session_flushes_escape_key_quickly():

@@ -187,6 +187,11 @@ def repl(client, session, start_time):
         logger.info("↓↓↓↓" * 10)
         logger.info("REPL waiting for command...")
 
+        # did-you-mean correction: prefill once, Enter accepts it;
+        # Ctrl+C or clearing the line drops it
+        prefill = client.prefill_command
+        client.prefill_command = ""
+
         try:
             command = session.prompt(
                 prompt_message(client),
@@ -200,6 +205,7 @@ def repl(client, session, start_time):
                 rprompt=lambda: "<transaction>" if config.transaction else None,
                 key_bindings=key_bindings,
                 enable_suspend=True,
+                default=prefill,
             )
 
         except KeyboardInterrupt:

@@ -79,6 +79,18 @@ def test_send_command_unknown_command_suggests_similar(config):
             ),
         ]
     )
+    assert client.prefill_command == "DEL a"
+
+
+def test_send_command_unknown_command_prefill_keeps_raw_args(config):
+    client = Client("127.0.0.1", 6379, None)
+    client.execute = MagicMock(
+        side_effect=redis.exceptions.ResponseError(
+            "unknown command `sett`, with args beginning with: `foo`,"
+        )
+    )
+    next(client.send_command('sett foo "hello world"'))
+    assert client.prefill_command == 'SET foo "hello world"'
 
 
 def test_send_command_unknown_command_without_suggestion(config):
@@ -90,6 +102,7 @@ def test_send_command_unknown_command_without_suggestion(config):
     assert resp == FormattedText(
         [("class:type", "(error) "), ("class:error", "unknown command `xqzwvk`")]
     )
+    assert client.prefill_command == ""
 
 
 def test_send_command_internal_error_keeps_exception_type(config):

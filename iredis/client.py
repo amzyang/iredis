@@ -107,6 +107,10 @@ class Client:
         # with a non-zero code
         self.command_failed = False
 
+        # did-you-mean correction of the last unknown command; the REPL
+        # prefills it into the next prompt so Enter accepts it
+        self.prefill_command = ""
+
         self.build_connection()
 
         # all command upper case
@@ -624,6 +628,10 @@ class Client:
                     if suggestions:
                         hint = ", ".join(f"`{s}`" for s in suggestions)
                         error_message += f"\nDid you mean {hint}?"
+                        # keep the raw args text so quoting survives
+                        self.prefill_command = (
+                            suggestions[0] + redis_command.strip()[len(command_name) :]
+                        )
             else:
                 error_message = f"{type(e).__name__}: {e}"
             if config.raw:
