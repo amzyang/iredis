@@ -1,4 +1,5 @@
 import csv
+import difflib
 import functools
 import json
 import logging
@@ -161,6 +162,31 @@ def split_command_args(command):
     args = list(strip_quote_args(input_args))
 
     return input_command, args
+
+
+def suggest_commands(command_name):
+    """
+    Known commands similar to ``command_name``, for did-you-mean hints.
+
+    Excludes the exact match itself: a command iredis knows but the
+    server rejects (old server version) needs no suggestion.
+
+    difflib ranks by similarity ratio only, which ties `DELETE` with
+    `SELECT`; a prefix relation (`DELETE` vs `DEL`) is a much stronger
+    typo signal, so when any prefix match exists only those are kept.
+    """
+    normalized = " ".join(command_name.split()).upper()
+    matches = [
+        match
+        for match in difflib.get_close_matches(normalized, all_commands, n=5)
+        if match != normalized
+    ]
+    prefix_matches = [
+        match
+        for match in matches
+        if normalized.startswith(match) or match.startswith(normalized)
+    ]
+    return (prefix_matches or matches)[:3]
 
 
 def split_unknown_args(command):

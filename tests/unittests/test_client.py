@@ -61,6 +61,37 @@ def test_send_command_renders_utf8_error_message(config):
     )
 
 
+def test_send_command_unknown_command_suggests_similar(config):
+    client = Client("127.0.0.1", 6379, None)
+    client.execute = MagicMock(
+        side_effect=redis.exceptions.ResponseError(
+            "unknown command `delete`, with args beginning with: `a`,"
+        )
+    )
+    resp = next(client.send_command("delete a"))
+    assert resp == FormattedText(
+        [
+            ("class:type", "(error) "),
+            (
+                "class:error",
+                "unknown command `delete`, with args beginning with: `a`,"
+                "\nDid you mean `DEL`?",
+            ),
+        ]
+    )
+
+
+def test_send_command_unknown_command_without_suggestion(config):
+    client = Client("127.0.0.1", 6379, None)
+    client.execute = MagicMock(
+        side_effect=redis.exceptions.ResponseError("unknown command `xqzwvk`")
+    )
+    resp = next(client.send_command("xqzwvk"))
+    assert resp == FormattedText(
+        [("class:type", "(error) "), ("class:error", "unknown command `xqzwvk`")]
+    )
+
+
 def test_send_command_internal_error_keeps_exception_type(config):
     client = Client("127.0.0.1", 6379, None)
     client.execute = MagicMock(side_effect=TypeError("boom"))

@@ -33,6 +33,7 @@ from .commands import (
     groups,
     split_command_args,
     split_unknown_args,
+    suggest_commands,
 )
 from .completers import IRedisCompleter
 from .config import config
@@ -616,6 +617,13 @@ class Client:
             # for unexpected internal errors
             if isinstance(e, (RedisError, IRedisException)):
                 error_message = str(e)
+                if isinstance(e, ResponseError) and error_message.lower().startswith(
+                    "unknown command"
+                ):
+                    suggestions = suggest_commands(command_name)
+                    if suggestions:
+                        hint = ", ".join(f"`{s}`" for s in suggestions)
+                        error_message += f"\nDid you mean {hint}?"
             else:
                 error_message = f"{type(e).__name__}: {e}"
             if config.raw:
