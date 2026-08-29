@@ -3,7 +3,7 @@ name = "iredis"
 version = "2.4.2"
 description = "Terminal client for Redis with auto-completion and syntax highlighting."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 authors = [{ name = "laixintao", email = "laixintao1995@163.com" }]
@@ -16,10 +16,6 @@ classifiers = [
   "Environment :: MacOS X",
   "Intended Audience :: Developers",
   "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Database",
 ]

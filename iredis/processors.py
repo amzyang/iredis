@@ -41,7 +41,7 @@ class UpdateBottomProcessor(Processor):
         input_text = transformation_input.document.text
         try:
             command, _ = split_command_args(input_text)
-        except (InvalidArguments, AmbiguousCommand):
+        except InvalidArguments, AmbiguousCommand:
             self.command_holder.command = None
         else:
             self.command_holder.command = command.upper()
@@ -66,7 +66,7 @@ class PasswordProcessor(Processor):
         default_transformation = Transformation(transformation_input.fragments)
         try:
             command, _ = split_command_args(input_text)
-        except (InvalidArguments, AmbiguousCommand):
+        except InvalidArguments, AmbiguousCommand:
             return default_transformation
 
         if command.upper() != "AUTH":

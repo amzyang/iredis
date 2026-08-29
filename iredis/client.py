@@ -556,7 +556,7 @@ class Client:
         try:
             try:
                 command_name, args = split_command_args(redis_command)
-            except (InvalidArguments, AmbiguousCommand):
+            except InvalidArguments, AmbiguousCommand:
                 logger.warning(
                     "This is not a iredis known command, send to redis-server anyway..."
                 )

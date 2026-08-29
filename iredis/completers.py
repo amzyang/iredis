@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dateutil.relativedelta import relativedelta
 from prompt_toolkit.completion import (
@@ -123,7 +123,7 @@ class TimestampCompleter(Completer):
     def _completion_formatted_time(self, document: Document) -> Iterable[Completion]:
         text = document.text
         try:
-            dt = datetime.fromisoformat(text).replace(tzinfo=timezone.utc)
+            dt = datetime.fromisoformat(text).replace(tzinfo=UTC)
         except Exception:
             return
         yield Completion(
@@ -189,7 +189,7 @@ class IRedisCompleter(Completer):
             completer = GrammarCompleter(
                 compiled_grammar=grammar, completers=self.completer_mapping
             )
-        except (InvalidArguments, AmbiguousCommand):
+        except InvalidArguments, AmbiguousCommand:
             completer = self.root_completer
 
         return completer

@@ -362,7 +362,7 @@ def parse_url(url, db=0):
             try:
                 db = int(path.replace("/", ""))
                 path = None
-            except (AttributeError, ValueError):
+            except AttributeError, ValueError:
                 pass
         qs = parse_qs(url.query)
         if "ssl_cert_reqs" in qs:

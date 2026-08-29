@@ -91,7 +91,7 @@ class IRedisLexer(Lexer):
             # compile grammar for this command
             grammar = get_command_grammar(command)
             self._current_lexer = GrammarLexer(grammar, lexers=get_lexer_mapping())
-        except (InvalidArguments, AmbiguousCommand):
+        except InvalidArguments, AmbiguousCommand:
             self._current_lexer = self._dummy
 
         return self._current_lexer.lex_document(document)

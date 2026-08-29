@@ -50,7 +50,7 @@ class ScreenedCli:
         while time.time() < end:
             try:
                 self.stream.feed(self.child.read_nonblocking(100000, timeout=0.2))
-            except (pexpect.TIMEOUT, pexpect.EOF):
+            except pexpect.TIMEOUT, pexpect.EOF:
                 pass
 
     def display(self):
