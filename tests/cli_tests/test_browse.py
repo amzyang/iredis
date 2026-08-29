@@ -118,9 +118,11 @@ def test_browse_dual_pane_flow(browse_cli):
     cli.wait_for(r"500 keys")
     cli.wait_for(r"scan finished")
 
-    # Tab moves focus to the detail pane and back to the keys pane
+    # Tab cycles the focus: keys → detail → repl → keys
     cli.child.send("\t")
     cli.wait_for(r"\[detail\]")
+    cli.child.send("\t")
+    cli.wait_for(r"\[repl\]")
     cli.child.send("\t")
     cli.wait_for(r"\[keys\]")
 
@@ -140,6 +142,24 @@ def test_browse_dual_pane_flow(browse_cli):
     # the REPL survives the browser session
     cli.child.sendline("dbsize")
     cli.wait_for(r"\(integer\) 499")
+
+
+def test_browse_repl_runs_command(browse_cli):
+    cli = browse_cli
+    cli.child.sendline("BROWSE user:*")
+    cli.wait_for(r"\[keys\]")
+
+    cli.child.send("\t\t")  # keys → detail → repl
+    cli.wait_for(r"\[repl\]")
+    cli.child.send("GET user:42\r")
+    cli.wait_for(r"> GET user:42")
+    cli.wait_for(r'"42"')
+
+    # Esc leaves the repl, q then quits the browser
+    cli.child.send("\x1b")
+    cli.wait_for(r"\[keys\]")
+    cli.child.send("q")
+    cli.wait_for(r"127\.0\.0\.1:6379\[15\]>")
 
 
 def test_browse_refuses_non_tty():

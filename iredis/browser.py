@@ -20,8 +20,7 @@ sole connection user while the browser is open -- the REPL is parked in
 Key bindings:
     /                        edit the pattern: a menu offers recently used
                              patterns, Enter rescans, Esc cancels
-    Tab                      switch focus between the key tree and the
-                             detail pane
+    Tab                      cycle the focus: key tree → detail pane → repl
     Up/Down/PageUp/PageDown  move the selection, or scroll the detail pane
                              when it has the focus (vim j/k work too)
     Left/Right (h/l)         fold a group / unfold it (Left on a key jumps
@@ -32,8 +31,14 @@ Key bindings:
     d d                      delete the selected key (press twice to confirm)
     q / Esc / Ctrl-C         exit
 
+Below the detail pane a 5-row repl runs redis commands on the same
+connection: Enter runs the input line, Up/Down recall its history,
+PageUp/PageDown scroll the output above it. Commands that take over the
+connection (MONITOR, SUBSCRIBE) are rejected, and dangerous commands are
+too while the warning config is on -- there is no room to confirm here.
+
 The mouse works too: click a key to select it (a group folds/unfolds),
-the wheel scrolls either pane, and a click on the 🔍 box edits the
+the wheel scrolls any pane, and a click on the 🔍 box edits the
 pattern.
 """
 
@@ -64,9 +69,12 @@ from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.mouse_events import MouseEventType
 from prompt_toolkit.utils import get_cwidth
 
+from .commands import split_command_args, split_unknown_args
 from .config import config
+from .exceptions import AmbiguousCommand, InvalidArguments
 from .style import get_style
 from .utils import ESCAPE_FLUSH_TIMEOUT, copy_to_clipboard, ensure_str
+from .warning import is_dangerous
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +109,12 @@ VALUE_COMMANDS = {
 }
 # types whose response is a flat [a, b, a, b, ...] pair list
 PAIRED_TYPES = ("hash", "zset")
+
+# rows of the repl output pane; with its input line the repl is 5 rows
+REPL_OUTPUT_HEIGHT = 4
+# commands that switch the shared connection into a streaming mode the
+# browser's single worker can't host
+REPL_UNSUPPORTED = ("MONITOR", "SUBSCRIBE", "PSUBSCRIBE")
 
 
 def _bucket_level(items, separator):
@@ -207,6 +221,11 @@ def _pad(text):
     return text + " " * max(0, TREE_WIDTH - get_cwidth(text))
 
 
+def _clickable(fragments, handler):
+    """Attach one mouse handler to every fragment of a pane's text."""
+    return FormattedText([(style, text, handler) for style, text in fragments])
+
+
 def value_text(client, key, key_type):
     """The key's raw value serialized as clipboard-friendly text.
 
@@ -278,6 +297,9 @@ class KeyBrowser:
         # one-shot footer message (e.g. "value copied"), cleared on any key
         self.notice = None
         self.expanded = set()
+        # repl under the detail pane: its own recall history, last output
+        self.repl_history = InMemoryHistory()
+        self.repl_output = [("class:type", "repl: type a redis command, Enter runs it")]
         self._detail_cache = {}
         self._type_pending = set()
         self._detail_pending = set()
@@ -500,18 +522,82 @@ class KeyBrowser:
 
         return handler
 
-    def detail_mouse_handler(self, mouse_event):
-        """The wheel scrolls the detail pane, a click focuses it."""
-        pane = self.detail_pane
+    def _pane_mouse_handler(self, mouse_event, pane, focus_target):
+        """The wheel scrolls the pane, a click focuses the target."""
         if mouse_event.event_type == MouseEventType.SCROLL_DOWN:
-            # the pane clips the bottom overshoot while it has the focus
+            # the pane clips the bottom overshoot on the next repaint
             pane.vertical_scroll += 3
         elif mouse_event.event_type == MouseEventType.SCROLL_UP:
             pane.vertical_scroll = max(0, pane.vertical_scroll - 3)
         elif mouse_event.event_type == MouseEventType.MOUSE_UP:
-            get_app().layout.focus(self.detail_window)
+            get_app().layout.focus(focus_target)
         else:
             return NotImplemented
+
+    def detail_mouse_handler(self, mouse_event):
+        """The wheel scrolls the detail pane, a click focuses it."""
+        return self._pane_mouse_handler(
+            mouse_event, self.detail_pane, self.detail_window
+        )
+
+    # === repl: run any redis command without leaving the browser ===
+
+    def _show_repl_output(self, command, fragments):
+        """The echoed command line heads whatever the repl shows for it."""
+        self.repl_output = [("class:key", f"> {command}"), ("", "\n"), *fragments]
+
+    def run_repl_command(self, buffer):
+        """Accept handler of the repl input: echo the command, then run
+        it on the worker; False clears the input (it went to the history)."""
+        command = buffer.text.strip()
+        if not command:
+            return False
+        self._show_repl_output(command, [("class:type", "running…")])
+        self.repl_pane.vertical_scroll = 0
+        self._submit(self._repl_job, command)
+        return False
+
+    def _repl_job(self, command):
+        # not generation-gated: the command's side effects happened on
+        # the server either way, so the output always lands
+        if self._closed:
+            return
+        self._show_repl_output(command, self._repl_fragments(command))
+        # a write may have changed the selected key: peek it fresh
+        self._detail_cache.clear()
+        self._invalidate()
+
+    def _repl_fragments(self, command):
+        try:
+            command_name, args = split_command_args(command)
+        except InvalidArguments, AmbiguousCommand:
+            command_name, args = split_unknown_args(command)
+        upper_name = command_name.upper()
+        if upper_name in REPL_UNSUPPORTED:
+            return [
+                (
+                    "class:error",
+                    f"{upper_name} takes over the connection, run it in the REPL",
+                )
+            ]
+        dangerous, reason = is_dangerous(upper_name)
+        if config.warning and dangerous:
+            return [("class:error", f"(danger) {reason}, run it in the REPL")]
+        try:
+            resp = self.client.execute(command_name, *args)
+        except Exception as e:
+            logger.exception(e)
+            return [("class:error", f"(error) {e}")]
+        rendered = self.client.render_response(resp, command_name)
+        if isinstance(rendered, (bytes, str)):
+            return [("", _clip_str(rendered))]
+        return rendered
+
+    def repl_output_mouse_handler(self, mouse_event):
+        """The wheel scrolls the repl output, a click focuses the input."""
+        return self._pane_mouse_handler(
+            mouse_event, self.repl_pane, self.repl_input_window
+        )
 
     def copy_selected_key(self):
         key = self.selected_key
@@ -597,12 +683,20 @@ class KeyBrowser:
                     "Enter rescan  Esc cancel  ↑/↓ recent patterns ",
                 ),
             ]
+        if layout.has_focus(self.repl_buffer):
+            return [
+                ("class:bottom-toolbar.on", " [repl] "),
+                (
+                    "class:bottom-toolbar",
+                    "Enter run  ↑/↓ history  PgUp/PgDn scroll  Tab/Esc keys ",
+                ),
+            ]
         if layout.has_focus(self.detail_window):
             return [
                 ("class:bottom-toolbar.on", " [detail] "),
                 (
                     "class:bottom-toolbar",
-                    "j/k scroll  y/Y copy value/key  / pattern  Tab keys  q quit ",
+                    "j/k scroll  y/Y copy value/key  / pattern  Tab repl  q quit ",
                 ),
             ]
         return [
@@ -730,12 +824,7 @@ class KeyBrowser:
         )
         self.detail_window = Window(
             FormattedTextControl(
-                lambda: FormattedText(
-                    [
-                        (style, text, self.detail_mouse_handler)
-                        for style, text in self.detail_rows()
-                    ]
-                ),
+                lambda: _clickable(self.detail_rows(), self.detail_mouse_handler),
                 focusable=True,
                 key_bindings=self.detail_key_bindings(),
             ),
@@ -750,6 +839,32 @@ class KeyBrowser:
             keep_focused_window_visible=False,
             display_arrows=False,
             width=Dimension(weight=1),
+        )
+        self.repl_buffer = Buffer(
+            multiline=False,
+            history=self.repl_history,
+            accept_handler=self.run_repl_command,
+        )
+        self.repl_output_window = Window(
+            FormattedTextControl(
+                lambda: _clickable(self.repl_output, self.repl_output_mouse_handler),
+            ),
+            wrap_lines=True,
+        )
+        self.repl_pane = ScrollablePane(
+            self.repl_output_window,
+            keep_cursor_visible=False,
+            keep_focused_window_visible=False,
+            display_arrows=False,
+            height=REPL_OUTPUT_HEIGHT,
+        )
+        self.repl_input_window = Window(
+            BufferControl(
+                self.repl_buffer,
+                focus_on_click=True,
+                key_bindings=self.repl_key_bindings(),
+            ),
+            height=1,
         )
 
     def _root_container(self):
@@ -772,11 +887,27 @@ class KeyBrowser:
                 ),
             ]
         )
+        detail_column = HSplit(
+            [
+                self.detail_pane,
+                Window(height=1, char="─", style="class:bottom-toolbar"),
+                self.repl_pane,
+                VSplit(
+                    [
+                        Window(
+                            FormattedTextControl([("class:pattern", "> ")]),
+                            dont_extend_width=True,
+                        ),
+                        self.repl_input_window,
+                    ]
+                ),
+            ]
+        )
         body = VSplit(
             [
                 self.tree_window,
                 Window(width=1, char="│", style="class:bottom-toolbar"),
-                self.detail_pane,
+                detail_column,
             ]
         )
         footer = Window(
@@ -895,9 +1026,35 @@ class KeyBrowser:
 
         return kb
 
+    def repl_key_bindings(self):
+        """Bindings of the repl input; control-level, like the pattern
+        box, so no single-letter binding can swallow typed text."""
+        kb = KeyBindings()
+
+        @kb.add("escape", eager=True)
+        def _(event):
+            event.app.layout.focus(self.tree_window)
+
+        @kb.add("tab")
+        def _(event):
+            event.app.layout.focus(self.tree_window)
+
+        # the input keeps the focus: page keys scroll the output above it
+        @kb.add("pagedown")
+        def _(event):
+            self.repl_pane.vertical_scroll += REPL_OUTPUT_HEIGHT
+
+        @kb.add("pageup")
+        def _(event):
+            self.repl_pane.vertical_scroll = max(
+                0, self.repl_pane.vertical_scroll - REPL_OUTPUT_HEIGHT
+            )
+
+        return kb
+
     def app_key_bindings(self):
         kb = KeyBindings()
-        in_input = has_focus(self.pattern_buffer)
+        in_input = has_focus(self.pattern_buffer) | has_focus(self.repl_buffer)
 
         def do_exit(event):
             event.app.exit(result=None)
@@ -910,7 +1067,7 @@ class KeyBrowser:
         def _(event):
             layout = event.app.layout
             if layout.has_focus(self.detail_window):
-                layout.focus(self.tree_window)
+                layout.focus(self.repl_input_window)
             else:
                 layout.focus(self.detail_window)
 

@@ -3,11 +3,13 @@ from unittest.mock import ANY, MagicMock
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.data_structures import Point
 from prompt_toolkit.document import Document
+from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from prompt_toolkit.utils import get_cwidth
 
 from iredis.browser import (
+    REPL_OUTPUT_HEIGHT,
     TREE_WIDTH,
     KeyBrowser,
     RecentPatternCompleter,
@@ -375,7 +377,7 @@ def test_recent_pattern_completer_filters_by_substring():
 # === focus switching, detail scrolling ===
 
 
-def test_tab_moves_focus_from_tree_to_detail_and_back():
+def test_tab_cycles_tree_detail_repl():
     browser = make_browser([("user:1", "string")])
     handlers = {
         binding.keys[0]: binding.handler
@@ -390,7 +392,26 @@ def test_tab_moves_focus_from_tree_to_detail_and_back():
     event.app.layout.focus.reset_mock()
     event.app.layout.has_focus = lambda target: target is browser.detail_window
     handlers["c-i"](event)
-    event.app.layout.focus.assert_called_once_with(browser.tree_window)
+    event.app.layout.focus.assert_called_once_with(browser.repl_input_window)
+
+
+def test_repl_bindings_leave_to_tree_and_scroll_output():
+    browser = make_browser([("user:1", "string")])
+    handlers = {
+        binding.keys[0]: binding.handler
+        for binding in browser.repl_key_bindings().bindings
+    }
+    event = MagicMock()
+
+    handlers["c-i"](event)
+    event.app.layout.focus.assert_called_with(browser.tree_window)
+    handlers["escape"](event)
+    event.app.layout.focus.assert_called_with(browser.tree_window)
+
+    handlers["pagedown"](event)
+    assert browser.repl_pane.vertical_scroll == REPL_OUTPUT_HEIGHT
+    handlers["pageup"](event)
+    assert browser.repl_pane.vertical_scroll == 0
 
 
 def test_detail_bindings_scroll_and_move_resets():
@@ -781,3 +802,160 @@ def test_peek_skipped_when_selection_moved_away():
     executor.run()
     client.do_peek.assert_called_once_with("a")
     assert browser.detail_rows()[-1] == ("", "detail")
+
+
+# === repl under the detail pane ===
+
+
+def repl_run(browser, command):
+    browser.repl_buffer.text = command
+    return browser.run_repl_command(browser.repl_buffer)
+
+
+def test_repl_block_is_five_rows():
+    browser = make_browser([("user:1", "string")])
+    assert browser.repl_pane.height == REPL_OUTPUT_HEIGHT == 4
+    assert browser.repl_input_window.height == 1
+
+
+def test_repl_buffer_wired_as_accept_handler():
+    browser = make_browser([("user:1", "string")])
+    assert browser.repl_buffer.accept_handler == browser.run_repl_command
+    assert not browser.repl_buffer.multiline()
+
+
+def test_repl_runs_command_and_shows_rendered_output():
+    browser = make_browser([("user:1", "string")])
+    browser.client.execute.reset_mock()
+    browser.client.execute.return_value = b"bar"
+    browser.client.render_response.return_value = FormattedText(
+        [("class:string", '"bar"')]
+    )
+
+    keep = repl_run(browser, "GET foo")
+
+    assert keep is False  # the input clears, the line went to the history
+    browser.client.execute.assert_called_once_with("GET", "foo")
+    browser.client.render_response.assert_called_once_with(b"bar", "GET")
+    assert browser.repl_output[0] == ("class:key", "> GET foo")
+    assert ("class:string", '"bar"') in browser.repl_output
+
+
+def test_repl_unknown_command_sent_to_server_anyway():
+    browser = make_browser([("user:1", "string")])
+    browser.client.execute.reset_mock()
+    browser.client.render_response.return_value = FormattedText([("", "ok")])
+
+    repl_run(browser, "FOOBAR a b")
+
+    browser.client.execute.assert_called_once_with("FOOBAR", "a", "b")
+
+
+def test_repl_empty_input_is_a_noop():
+    browser = make_browser([("user:1", "string")])
+    browser.client.execute.reset_mock()
+    before = browser.repl_output
+
+    repl_run(browser, "   ")
+
+    browser.client.execute.assert_not_called()
+    assert browser.repl_output is before
+
+
+def test_repl_rejects_streaming_commands():
+    browser = make_browser([("user:1", "string")])
+    browser.client.execute.reset_mock()
+
+    repl_run(browser, "MONITOR")
+
+    browser.client.execute.assert_not_called()
+    assert browser.repl_output[-1][0] == "class:error"
+    assert "MONITOR" in browser.repl_output[-1][1]
+
+
+def test_repl_blocks_dangerous_command_when_warning_on(monkeypatch):
+    from iredis.config import config
+
+    monkeypatch.setattr(config, "warning", True)
+    browser = make_browser([("user:1", "string")])
+    browser.client.execute.reset_mock()
+
+    repl_run(browser, "FLUSHALL")
+
+    browser.client.execute.assert_not_called()
+    assert browser.repl_output[-1][0] == "class:error"
+
+
+def test_repl_dangerous_command_runs_with_warning_off(monkeypatch):
+    from iredis.config import config
+
+    monkeypatch.setattr(config, "warning", False)
+    browser = make_browser([("user:1", "string")])
+    browser.client.execute.reset_mock()
+    browser.client.render_response.return_value = FormattedText(
+        [("class:success", "OK")]
+    )
+
+    repl_run(browser, "FLUSHALL")
+
+    browser.client.execute.assert_called_once_with("FLUSHALL")
+
+
+def test_repl_server_error_shown_in_output():
+    browser = make_browser([("user:1", "string")])
+    browser.client.execute.reset_mock()
+    browser.client.execute.side_effect = Exception("boom")
+
+    repl_run(browser, "GET foo")
+
+    assert ("class:error", "(error) boom") in browser.repl_output
+
+
+def test_repl_raw_bytes_output_decoded():
+    browser = make_browser([("user:1", "string")])
+    browser.client.render_response.return_value = b"raw"
+
+    repl_run(browser, "GET foo")
+
+    assert ("", "raw") in browser.repl_output
+
+
+def test_repl_command_drops_stale_detail_cache():
+    browser = make_browser([("user:1", "string")])
+    browser._detail_cache["user:1"] = [("", "stale")]
+    browser.client.render_response.return_value = FormattedText(
+        [("class:success", "OK")]
+    )
+
+    repl_run(browser, "SET user:1 new")
+
+    assert browser._detail_cache == {}
+
+
+def test_repl_shows_running_placeholder_until_result_lands():
+    executor = DeferredExecutor()
+    client = make_client([("user:1", "string")])
+    browser = KeyBrowser(client, "user:*", executor=executor)
+    executor.run()  # the initial scan lands
+    client.render_response.return_value = FormattedText([("", "1")])
+
+    repl_run(browser, "DBSIZE")
+
+    assert browser.repl_output[-1] == ("class:type", "running…")
+    executor.run()
+    assert browser.repl_output[0] == ("class:key", "> DBSIZE")
+    assert browser.repl_output[-1] == ("", "1")
+
+
+def test_repl_output_wheel_scrolls_and_click_focuses_input(monkeypatch):
+    browser = make_browser([("user:1", "string")])
+    app = MagicMock()
+    monkeypatch.setattr("iredis.browser.get_app", lambda: app)
+
+    browser.repl_output_mouse_handler(mouse(MouseEventType.SCROLL_DOWN))
+    assert browser.repl_pane.vertical_scroll == 3
+    browser.repl_output_mouse_handler(mouse(MouseEventType.SCROLL_UP))
+    assert browser.repl_pane.vertical_scroll == 0
+
+    browser.repl_output_mouse_handler(mouse(MouseEventType.MOUSE_UP))
+    app.layout.focus.assert_called_once_with(browser.repl_input_window)
