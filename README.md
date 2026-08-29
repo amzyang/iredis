@@ -470,12 +470,8 @@ uv run ruff check . --fix
 uv run ty check
 ```
 
-We recommend installing [pre-commit](https://pre-commit.com/) so ruff runs
-automatically on each `git commit`:
-
-```bash
-uv run pre-commit install
-```
+Or with [just](https://github.com/casey/just): `just fmt` to format and
+auto-fix, `just lint` to run all checks.
 
 ### Development Logs
 
