@@ -18,7 +18,11 @@ from iredis.utils import (
 )
 
 
-def test_timer():
+def test_timer(monkeypatch):
+    # the counter is process-global and incremented by any timer() call
+    # before this test; reset it so assertions don't depend on test order
+    monkeypatch.setattr("iredis.utils._timer_counter", 0)
+    monkeypatch.setattr("iredis.utils._last_timer", time.time())
     with patch("iredis.utils.logger") as mock_logger:
         timer("foo")
         time.sleep(0.1)
@@ -27,7 +31,7 @@ def test_timer():
         args, kwargs = mock_logger.debug.call_args
         matched = re.match(r"\[timer (\d)\] (0\.\d+) -> bar", args[0])
 
-        assert matched.group(1) == str(3)
+        assert matched.group(1) == str(1)
         assert 0.1 <= float(matched.group(2)) <= 0.2
 
         # --- test again ---
@@ -38,7 +42,7 @@ def test_timer():
         args, kwargs = mock_logger.debug.call_args
         matched = re.match(r"\[timer (\d)\] (0\.\d+) -> bar", args[0])
 
-        assert matched.group(1) == str(5)
+        assert matched.group(1) == str(3)
         assert 0.2 <= float(matched.group(2)) <= 0.3
 
 
