@@ -34,8 +34,9 @@ Key bindings:
 Below the detail pane a 5-row repl runs redis commands on the same
 connection: Enter runs the input line, Up/Down recall its history,
 PageUp/PageDown scroll the output above it. Commands that take over the
-connection (MONITOR, SUBSCRIBE) are rejected, and dangerous commands are
-too while the warning config is on -- there is no room to confirm here.
+connection (MONITOR, SUBSCRIBE) or park the worker waiting for data
+(BLPOP, WAIT, XREAD BLOCK) are rejected, and dangerous commands are too
+while the warning config is on -- there is no room to confirm here.
 
 The mouse works too: click a key to select it (a group folds/unfolds),
 the wheel scrolls any pane, a click on the 🔍 box edits the pattern, and
@@ -118,7 +119,22 @@ PAIRED_TYPES = ("hash", "zset")
 REPL_OUTPUT_HEIGHT = 4
 # commands that switch the shared connection into a streaming mode the
 # browser's single worker can't host
-REPL_UNSUPPORTED = ("MONITOR", "SUBSCRIBE", "PSUBSCRIBE")
+REPL_UNSUPPORTED = ("MONITOR", "SUBSCRIBE", "PSUBSCRIBE", "SSUBSCRIBE")
+# commands that park the worker waiting for data: every queued scan, peek
+# and repl job stalls behind them, and closing the browser joins the
+# worker, so a timeout of 0 would hang the whole process
+REPL_BLOCKING = (
+    "BLPOP",
+    "BRPOP",
+    "BLMOVE",
+    "BRPOPLPUSH",
+    "BLMPOP",
+    "BZPOPMIN",
+    "BZPOPMAX",
+    "BZMPOP",
+    "WAIT",
+    "WAITAOF",
+)
 
 
 def _bucket_level(items, separator):
@@ -679,6 +695,16 @@ class KeyBrowser:
                 (
                     "class:error",
                     f"{upper_name} takes over the connection, run it in the REPL",
+                )
+            ]
+        if upper_name in REPL_BLOCKING or (
+            upper_name in ("XREAD", "XREADGROUP")
+            and any(arg.upper() == "BLOCK" for arg in args)
+        ):
+            return [
+                (
+                    "class:error",
+                    f"{upper_name} blocks the browser's worker, run it in the REPL",
                 )
             ]
         dangerous, reason = is_dangerous(upper_name)

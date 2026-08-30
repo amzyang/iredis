@@ -939,13 +939,38 @@ def test_repl_empty_input_is_a_noop():
 
 def test_repl_rejects_streaming_commands():
     browser = make_browser([("user:1", "string")])
+    for command in ("MONITOR", "SSUBSCRIBE shard"):
+        browser.client.execute.reset_mock()
+
+        repl_run(browser, command)
+
+        browser.client.execute.assert_not_called()
+        assert browser.repl_output[-1][0] == "class:error"
+        assert command.split()[0] in browser.repl_output[-1][1]
+
+
+def test_repl_rejects_blocking_commands():
+    browser = make_browser([("user:1", "string")])
+    for command in ("BLPOP k 0", "WAIT 1 0", "XREAD BLOCK 0 STREAMS s $"):
+        browser.client.execute.reset_mock()
+
+        repl_run(browser, command)
+
+        browser.client.execute.assert_not_called()
+        assert browser.repl_output[-1][0] == "class:error"
+        assert command.split()[0] in browser.repl_output[-1][1]
+
+
+def test_repl_allows_xread_without_block():
+    browser = make_browser([("user:1", "string")])
     browser.client.execute.reset_mock()
+    browser.client.render_response.return_value = FormattedText([("", "(nil)")])
 
-    repl_run(browser, "MONITOR")
+    repl_run(browser, "XREAD COUNT 2 STREAMS s 0")
 
-    browser.client.execute.assert_not_called()
-    assert browser.repl_output[-1][0] == "class:error"
-    assert "MONITOR" in browser.repl_output[-1][1]
+    browser.client.execute.assert_called_once_with(
+        "XREAD", "COUNT", "2", "STREAMS", "s", "0"
+    )
 
 
 def test_repl_blocks_dangerous_command_when_warning_on(monkeypatch):
