@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Release-build fallback DSN, the Python counterpart of an ldflags-injected
 # value: the release process may stamp a real DSN here; an empty string
 # (local checkouts, forks) means telemetry disabled — never a failure.
-SENTRY_DSN = ""
+SENTRY_DSN: str = ""
 
 DSN_ENVIRON = "IREDIS_SENTRY_DSN"
 
