@@ -67,3 +67,11 @@ exclude = ["tests", "scripts"]
 [tool.uv.build-backend]
 # flat layout: the iredis package lives at the repository root
 module-root = ""
+
+[[tool.uv.index]]
+# Single source of truth for the lockfile's registry URLs: the release
+# machine and Dependabot must resolve against the same index, otherwise
+# uv.lock flips between mirrors on every release / bump commit.
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
