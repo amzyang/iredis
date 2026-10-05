@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 
 [[package]]
@@ -61,7 +61,7 @@ wheels = [
 
 [[package]]
 name = "iredis"
-version = "2.4.10"
+version = "2.4.11"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
